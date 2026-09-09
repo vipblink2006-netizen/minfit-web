@@ -42,7 +42,16 @@ def _convert_query(query: str) -> str:
     
     q = "".join(result)
     # Simple patches for SQLite to Postgres
-    q = re.sub(r'\bINSERT OR IGNORE INTO\b', 'INSERT INTO', q, flags=re.IGNORECASE)
+
+    # Simple patches for SQLite to Postgres
+    
+    if "INSERT OR IGNORE INTO Users" in q:
+        q = q.replace("INSERT OR IGNORE INTO", "INSERT INTO")
+        q += " ON CONFLICT (id) DO NOTHING"
+    else:
+        q = re.sub(r'\bINSERT OR IGNORE INTO\b', 'INSERT INTO', q, flags=re.IGNORECASE)
+
+
     # REPLACE is a bit complex, we'll try to let ON CONFLICT DO NOTHING handle it if there's a unique constraint
     # Or just replace INSERT OR REPLACE with INSERT for now, Postgres will throw error if conflict without ON CONFLICT.
     # To be safe, we will add ON CONFLICT DO NOTHING for BrokerSelectedProjects since it's just associations.
@@ -55,8 +64,7 @@ def _convert_query(query: str) -> str:
     if "BrokerSelectedProjects" in q and "INSERT INTO" in q:
         if "ON CONFLICT" not in q:
             q += " ON CONFLICT (broker_id, project_id) DO NOTHING"
-    if "INSERT OR IGNORE INTO Users" in q:
-        q = q.replace("INSERT OR IGNORE INTO", "INSERT INTO") + " ON CONFLICT (id) DO NOTHING"
+
     return q
 
 class PostgresCursorWrapper:
@@ -924,18 +932,20 @@ def _ensure_users_table_and_seeds(connection: sqlite3.Connection) -> None:
     );
     """)
 
-    try:
-        cols = [r[1] for r in connection.execute("PRAGMA table_info(Users)").fetchall()]
-        if "units_sold" not in cols:
-            connection.execute("ALTER TABLE Users ADD COLUMN units_sold INTEGER DEFAULT 0")
-        if "clients_count" not in cols:
-            connection.execute("ALTER TABLE Users ADD COLUMN clients_count INTEGER DEFAULT 0")
-        if "projects_count" not in cols:
-            connection.execute("ALTER TABLE Users ADD COLUMN projects_count INTEGER DEFAULT 0")
-        if "password_hash" not in cols:
-            connection.execute("ALTER TABLE Users ADD COLUMN password_hash TEXT DEFAULT ''")
-    except Exception:
-        pass  # Postgres schema is already up to date
+    server, _, _ = settings()
+    if server.lower() == 'sqlite':
+        try:
+            cols = [r[1] for r in connection.execute("PRAGMA table_info(Users)").fetchall()]
+            if "units_sold" not in cols:
+                connection.execute("ALTER TABLE Users ADD COLUMN units_sold INTEGER DEFAULT 0")
+            if "clients_count" not in cols:
+                connection.execute("ALTER TABLE Users ADD COLUMN clients_count INTEGER DEFAULT 0")
+            if "projects_count" not in cols:
+                connection.execute("ALTER TABLE Users ADD COLUMN projects_count INTEGER DEFAULT 0")
+            if "password_hash" not in cols:
+                connection.execute("ALTER TABLE Users ADD COLUMN password_hash TEXT DEFAULT ''")
+        except Exception:
+            pass
     
     # Seed official admin & broker accounts if not existing
     connection.execute("""
@@ -1106,6 +1116,12 @@ def database_status() -> DatabaseStatus:
         persona_count = cursor.execute("SELECT COUNT(*) FROM dbo.PersonaWeights").fetchval()
     return DatabaseStatus(server=server, database=database_name, project_count=int(project_count), persona_count=int(persona_count))
 
+
+# Tự động tạo bảng nếu chưa có
+try:
+    ensure_database()
+except Exception as e:
+    print("Lỗi khởi tạo DB:", e)
 
 if __name__ == "__main__":
     status = ensure_database()
