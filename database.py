@@ -924,15 +924,18 @@ def _ensure_users_table_and_seeds(connection: sqlite3.Connection) -> None:
     );
     """)
 
-    cols = [r[1] for r in connection.execute("PRAGMA table_info(Users)").fetchall()]
-    if "units_sold" not in cols:
-        connection.execute("ALTER TABLE Users ADD COLUMN units_sold INTEGER DEFAULT 0")
-    if "clients_count" not in cols:
-        connection.execute("ALTER TABLE Users ADD COLUMN clients_count INTEGER DEFAULT 0")
-    if "projects_count" not in cols:
-        connection.execute("ALTER TABLE Users ADD COLUMN projects_count INTEGER DEFAULT 0")
-    if "password_hash" not in cols:
-        connection.execute("ALTER TABLE Users ADD COLUMN password_hash TEXT DEFAULT ''")
+    try:
+        cols = [r[1] for r in connection.execute("PRAGMA table_info(Users)").fetchall()]
+        if "units_sold" not in cols:
+            connection.execute("ALTER TABLE Users ADD COLUMN units_sold INTEGER DEFAULT 0")
+        if "clients_count" not in cols:
+            connection.execute("ALTER TABLE Users ADD COLUMN clients_count INTEGER DEFAULT 0")
+        if "projects_count" not in cols:
+            connection.execute("ALTER TABLE Users ADD COLUMN projects_count INTEGER DEFAULT 0")
+        if "password_hash" not in cols:
+            connection.execute("ALTER TABLE Users ADD COLUMN password_hash TEXT DEFAULT ''")
+    except Exception:
+        pass  # Postgres schema is already up to date
     
     # Seed official admin & broker accounts if not existing
     connection.execute("""
