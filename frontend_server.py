@@ -217,7 +217,7 @@ class ReactRouterHandler(SimpleHTTPRequestHandler):
         except Exception as error:
             import traceback
             traceback.print_exc()
-            self._api_error(error, 500)
+            self._api_error(error)
 
     def do_DELETE(self):
         parsed_url = urlparse(self.path)
