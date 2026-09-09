@@ -951,7 +951,7 @@ def _ensure_users_table_and_seeds(connection: sqlite3.Connection) -> None:
     connection.execute("""
     INSERT OR IGNORE INTO Users (id, name, email, phone, password_hash, role, agency, status, clients_count, projects_count, units_sold, created_at, last_active)
     VALUES 
-        ('usr_admin', 'Super Admin (Chính chủ)', 'admin@minfit.vn', '0901.888.999', '', 'admin', 'MinFit System Admin', 'active', 0, 27, 0, CURRENT_TIMESTAMP, 'Vừa xong')
+        ('usr_admin', 'Super Admin (Chính chủ)', 'admin@minfit.vn', '0901.888.999', '', 'admin', 'MinFit System Admin', 'active', 0, 27, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
     """)
     
     row = connection.execute("SELECT password_hash FROM Users WHERE id = 'brk_moigioi'").fetchone()
@@ -961,7 +961,7 @@ def _ensure_users_table_and_seeds(connection: sqlite3.Connection) -> None:
             connection.execute("""
             INSERT INTO Users (id, name, email, phone, password_hash, role, agency, status, clients_count, projects_count, units_sold, created_at, last_active)
             VALUES 
-                ('brk_moigioi', 'Minh Anh (Môi giới)', 'moigioi@minfit.vn', '0912.345.678', ?, 'broker', 'Sàn BĐS Phố Đông Hà Nội', 'active', 0, 0, 0, CURRENT_TIMESTAMP, 'Vừa xong')
+                ('brk_moigioi', 'Minh Anh (Môi giới)', 'moigioi@minfit.vn', '0912.345.678', ?, 'broker', 'Sàn BĐS Phố Đông Hà Nội', 'active', 0, 0, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
             """, (demo_broker_hash,))
         else:
             connection.execute(
@@ -1028,7 +1028,7 @@ def save_user_to_db(user_data: dict[str, Any]) -> dict[str, Any]:
                 role=excluded.role,
                 agency=excluded.agency,
                 status=excluded.status,
-                last_active='Vừa xong'
+                last_active=CURRENT_TIMESTAMP
             """,
             (uid, name, email, phone, password_hash, role, agency, status)
         )

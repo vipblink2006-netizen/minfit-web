@@ -1663,7 +1663,7 @@ def create_client(payload: dict[str, Any]) -> dict[str, Any]:
         # Update user's clients_count and units_sold
         try:
             connection.execute(
-                "UPDATE Users SET clients_count = (SELECT COUNT(*) FROM clients WHERE broker_id = ?), last_active = 'Vừa xong' WHERE id = ?",
+                "UPDATE Users SET clients_count = (SELECT COUNT(*) FROM clients WHERE broker_id = ?), last_active = CURRENT_TIMESTAMP WHERE id = ?",
                 (broker_id, broker_id)
             )
         except Exception:

@@ -2,6 +2,13 @@ from __future__ import annotations
 
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 import json
+
+import datetime
+class CustomJSONEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, (datetime.date, datetime.datetime)):
+            return obj.isoformat()
+        return super().default(obj)
 from pathlib import Path
 import os
 import socket
