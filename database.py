@@ -574,7 +574,7 @@ def _ensure_sqlite_database(database_name: str) -> DatabaseStatus:
         """)
 
         for code, label in AMENITY_LABELS.items():
-            connection.execute("INSERT INTO Amenities(code,label) ON CONFLICT(code) DO UPDATE SET label=EXCLUDED.label VALUES (?,?)", (code, label))
+            connection.execute("INSERT INTO Amenities(code,label) VALUES (?,?) ON CONFLICT(code) DO UPDATE SET label=EXCLUDED.label", (code, label))
 
         for item in raw_projects:
             connection.execute(
@@ -1020,7 +1020,6 @@ def save_user_to_db(user_data: dict[str, Any]) -> dict[str, Any]:
         connection.execute(
             """
             INSERT INTO Users (id, name, email, phone, password_hash, role, agency, status, clients_count, projects_count, units_sold, created_at, last_active)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, CURRENT_TIMESTAMP, 'Vừa xong')
             ON CONFLICT(id) DO UPDATE SET
                 name=excluded.name,
                 email=excluded.email,

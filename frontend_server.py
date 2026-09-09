@@ -214,8 +214,10 @@ class ReactRouterHandler(SimpleHTTPRequestHandler):
                 self._send_json(toggle_user_status(uid))
             else:
                 self.send_error(404)
-        except (ValueError, TypeError, json.JSONDecodeError) as error:
-            self._api_error(error)
+        except Exception as error:
+            import traceback
+            traceback.print_exc()
+            self._api_error(error, 500)
 
     def do_DELETE(self):
         parsed_url = urlparse(self.path)
