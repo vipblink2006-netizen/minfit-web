@@ -1130,6 +1130,14 @@
       /* ================= PAYMENT SCHEME PRESETS (PHÂN RÃ THEO LOẠI HÌNH BĐS) ================= */
       const PAYMENT_SCHEME_PRESETS = {
         // BĐS Sơ cấp (CĐT)
+        auto: {
+          label: '💡 Tự động Tối ưu Vốn',
+          short_label: 'Tự động Tối ưu Vốn',
+          badge: 'Khuyên Dùng',
+          desc: 'Tự động tính toán phương thức có lợi nhất dựa trên dòng tiền của bạn',
+          market: 'primary',
+          config: {}
+        },
         loan_htls: {
           label: '🌟 Vay HTLS 0% & Ân hạn nợ gốc (24 tháng)',
           short_label: 'HTLS 0% & Ân hạn gốc (24T)',
@@ -1310,6 +1318,38 @@
                 </div>
               </div>
 
+              <!-- HNWI Dual Option Strategy Box -->
+              ${item.hnwi_strategy && item.hnwi_strategy.has_dual_option && html`
+                <div className="mt-5 mb-2 rounded-2xl border-2 border-emerald-500/30 bg-emerald-50/50 p-4">
+                  <div className="flex items-center gap-2 mb-3 pb-2 border-b border-emerald-200">
+                    <strong className="text-xs font-black uppercase tracking-wider text-emerald-900">
+                      🎯 CHIẾN LƯỢC KÉP DÀNH CHO KHÁCH HÀNG VIP (Vốn khả dụng > Giá trị tài sản)
+                    </strong>
+                  </div>
+                  <div className="grid md:grid-cols-2 gap-3 text-xs leading-relaxed">
+                    <div className="rounded-xl bg-white p-3 border border-emerald-200/80 shadow-sm">
+                      <span className="text-[10px] font-black uppercase tracking-wider text-emerald-800 block mb-1">
+                        KỊCH BẢN 1: THANH TOÁN SỚM 100%
+                      </span>
+                      <p className="text-ink/80 font-medium mb-1">
+                        Thanh toán đứt không cần vay, an toàn tuyệt đối. Nhận chiết khấu tối đa từ CĐT (nếu có).
+                      </p>
+                      <strong className="text-emerald-700">Dư tiền mặt: ${(item.hnwi_strategy.outright_cash_left / 1e9).toFixed(1)} Tỷ</strong>
+                    </div>
+
+                    <div className="rounded-xl bg-white p-3 border border-amber-200/80 shadow-sm">
+                      <span className="text-[10px] font-black uppercase tracking-wider text-amber-800 block mb-1">
+                        KỊCH BẢN 2: ĐÒN BẨY (GÓI HTLS)
+                      </span>
+                      <p className="text-ink/80 font-medium mb-1">
+                        Vay 70% ân hạn gốc lãi. Mang tiền đi đầu tư kênh khác (chứng khoán, KD) để bù đắp lãi thả nổi.
+                      </p>
+                      <strong className="text-amber-700">Dư tiền mặt: ${(item.hnwi_strategy.leverage_cash_left / 1e9).toFixed(1)} Tỷ</strong>
+                    </div>
+                  </div>
+                </div>
+              `}
+
               <!-- Metrics Section: 2 Columns Box matching Image 2 -->
               <div className="mt-5 grid md:grid-cols-2 gap-4 rounded-2xl border border-plum/10 bg-[#FAF7F6]/80 p-4.5 sm:p-5">
                 <!-- Left Metric: CHỈ SỐ DTI (TỶ LỆ NỢ) -->
@@ -1361,7 +1401,7 @@
                 <div className="mt-4 rounded-2xl border border-brick/25 bg-[#FFF8F6] p-4.5">
                   <div className="flex items-center justify-between gap-2 flex-wrap mb-2.5 pb-2 border-b border-brick/15">
                     <div className="flex items-center gap-2">
-                      <${CreditCard} size=${16} className="text-brick shrink-0" />
+                      <${Coins} size=${16} className="text-brick shrink-0" />
                       <strong className="text-xs font-black uppercase tracking-wider text-plum">
                         ĐÁNH GIÁ PHƯƠNG THỨC THANH TOÁN: ${schemeEval.scheme_name}
                       </strong>
@@ -1397,6 +1437,35 @@
                       <span><b>Khuyến nghị chiến lược:</b> ${schemeEval.advisory_recommendation}</span>
                     </div>
                   `}
+                </div>
+              `}
+
+              <!-- Hidden Costs Breakdown Block -->
+              ${item.hidden_costs_breakdown && html`
+                <div className="mt-4 rounded-2xl border border-indigo-200 bg-[#F4F6FF] p-4.5">
+                  <div className="flex items-center gap-2 mb-3 pb-2 border-b border-indigo-100">
+                    <strong className="text-xs font-black uppercase tracking-wider text-indigo-900">
+                      BÓC TÁCH CHI PHÍ CHÌM (${item.hidden_costs_breakdown.property_type === 'tho_cu' ? 'Nhà phố thổ cư' : item.hidden_costs_breakdown.property_type === 'thap_tang' ? 'BĐS Thấp tầng' : 'Chung cư'})
+                    </strong>
+                  </div>
+                  <ul className="space-y-2 text-xs font-medium text-indigo-900/80">
+                    <li className="flex justify-between">
+                      <span>Thuế, Phí chuyển nhượng (Trả 1 lần):</span>
+                      <strong className="text-indigo-900">${(Number(item.hidden_costs_breakdown.upfront_transfer_tax) / 1e6).toFixed(1)} triệu</strong>
+                    </li>
+                    <li className="flex justify-between">
+                      <span>Quỹ bảo trì (Trả 1 lần):</span>
+                      <strong className="text-indigo-900">${(Number(item.hidden_costs_breakdown.upfront_maintenance_fund) / 1e6).toFixed(1)} triệu</strong>
+                    </li>
+                    <li className="flex justify-between">
+                      <span>Khấu hao & Duy tu nhà (Hàng tháng):</span>
+                      <strong className="text-indigo-900">${(Number(item.hidden_costs_breakdown.monthly_maintenance_depreciation) / 1e6).toFixed(1)} triệu / tháng</strong>
+                    </li>
+                    <li className="flex justify-between">
+                      <span>Phí đỗ xe (Hàng tháng):</span>
+                      <strong className="text-indigo-900">${(Number(item.hidden_costs_breakdown.monthly_parking) / 1e6).toFixed(1)} triệu / tháng</strong>
+                    </li>
+                  </ul>
                 </div>
               `}
 
@@ -1758,7 +1827,7 @@
                       <div className="rounded-2xl border border-brick/30 bg-[#FFF7F5] p-5 shadow-sm">
                         <div className="flex items-center justify-between gap-2 flex-wrap mb-3 pb-2.5 border-b border-brick/15">
                           <div className="flex items-center gap-2">
-                            <${CreditCard} size=${18} className="text-brick shrink-0" />
+                            <${Coins} size=${18} className="text-brick shrink-0" />
                             <strong className="text-sm font-black uppercase tracking-wider text-plum">
                               ĐÁNH GIÁ PHƯƠNG THỨC THANH TOÁN: ${item.payment_scheme_evaluation.scheme_name}
                             </strong>
@@ -2451,8 +2520,9 @@
           client_phone: '',
           client_age: 32,
           cic_status: 'clean',
+          income_stability: 'salaried',
           market_segment: 'primary',
-          payment_scheme: 'loan_htls',
+          payment_scheme: 'auto',
           persona: 'family_with_children',
 
           // Nơi ở hiện tại (Mặc định Hà Nội)
@@ -2609,7 +2679,7 @@
 
         const handleMarketSegmentChange = (e) => {
           const newSegment = e.target.value;
-          const defaultSchemeKey = newSegment === 'primary' ? 'loan_htls' : 'bank_vcb';
+          const defaultSchemeKey = newSegment === 'primary' ? 'auto' : 'bank_vcb';
           const scheme = PAYMENT_SCHEME_PRESETS[defaultSchemeKey];
           setForm(old => ({
             ...old,
@@ -3031,9 +3101,18 @@
                     <option value="clean">CIC Nhóm 1 (Đủ điều kiện vay · Chuẩn)</option>
                     <option value="bad_debt">CIC Nợ chú ý / Nợ xấu (Không đủ điều kiện)</option>
                   </select>
-                  <span className="text-xs text-ink/50 mt-1.5 block font-semibold">
-                    Điều kiện tiên quyết xét duyệt hạn mức ngân hàng
-                  </span>
+                </label>
+
+                <label className="block">
+                  <span className="mb-1.5 block text-sm font-bold text-plum">Nguồn thu nhập</span>
+                  <select
+                    value=${form.income_stability}
+                    onChange=${update('income_stability')}
+                    className="w-full rounded-xl border border-plum/15 bg-[#F8F5F4] px-4 py-3 text-sm text-plum font-bold outline-none focus:border-brick focus:bg-white"
+                  >
+                    <option value="salaried">Lương chuyển khoản (Yêu cầu quỹ 6 tháng)</option>
+                    <option value="freelance_business">Tự do / KD (Yêu cầu quỹ 12 tháng)</option>
+                  </select>
                 </label>
               </div>
 
@@ -3494,6 +3573,7 @@
                   className="rounded-xl border border-plum/15 bg-white px-3 py-1.5 text-xs font-bold text-plum outline-none focus:border-brick"
                 >
                   <optgroup label="BĐS Sơ cấp (Dự án CĐT)">
+                    <option value="auto">💡 Tự động Tối ưu Vốn (Khuyên dùng)</option>
                     <option value="loan_htls">🌟 Vay HTLS 0% & Ân hạn nợ gốc (24T)</option>
                     <option value="standard_progress">📅 Tiến độ CĐT (Chia 7 đợt, không vay)</option>
                     <option value="early_payment">⚡ Thanh toán sớm 95% (Chiết khấu 10%)</option>

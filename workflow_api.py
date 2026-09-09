@@ -618,6 +618,20 @@ def _timeline_result(assessment: Any, payload: dict[str, Any]) -> dict[str, Any]
         available_cash = Decimal("1500000000")
     cash_remaining_after_move_in = available_cash - total_upfront_needed
 
+    hnwi_strategy = None
+    if available_cash >= project_price * Decimal("1.05"):
+        outright_cash_left = available_cash - (project_price + initial_move_in_capex)
+        leverage_cash_left = cash_remaining_after_move_in
+        hnwi_strategy = {
+            "has_dual_option": True,
+            "outright_cash_left": float(outright_cash_left),
+            "leverage_cash_left": float(leverage_cash_left),
+        }
+        # Cập nhật lời khuyên cho action plan HNWI
+        action_plan_hnwi = []
+        action_plan_hnwi.append(f"Kịch bản 1 (Mua đứt): Thanh toán 100%, giữ lại {float(outright_cash_left)/1e9:.1f} tỷ tiền mặt. Lợi ích: Nhận chiết khấu tối đa, an toàn tuyệt đối, DTI = 0%.")
+        action_plan_hnwi.append(f"Kịch bản 2 (Đòn bẩy): Dùng gói HTLS, giữ lại {float(leverage_cash_left)/1e9:.1f} tỷ tiền mặt. Lợi ích: Mang {float(leverage_cash_left)/1e9:.1f} tỷ đi đầu tư sinh lời ở kênh khác (chứng khoán, trái phiếu, kinh doanh) để bù đắp lãi suất thả nổi sau ưu đãi.")
+
     survival_runway_months = Decimal("0")
     if total_monthly_outflow > Decimal("0") and cash_remaining_after_move_in > Decimal("0"):
         survival_runway_months = round(cash_remaining_after_move_in / total_monthly_outflow, 1)
@@ -648,6 +662,11 @@ def _timeline_result(assessment: Any, payload: dict[str, Any]) -> dict[str, Any]
     else:
         payment_shock_ratio = Decimal("1.0")
     shock_level = "safe" if payment_shock_ratio <= Decimal("1.4") else "caution" if payment_shock_ratio <= Decimal("1.8") else "danger"
+    
+    if hnwi_strategy:
+        shock_level = "safe"
+        payment_shock_ratio = Decimal("1.0")
+
     shock_suggestion = ""
     if payment_shock_ratio > Decimal("1.8"):
         term_years = int(payload.get("term_years", 20))
@@ -691,7 +710,7 @@ def _timeline_result(assessment: Any, payload: dict[str, Any]) -> dict[str, Any]
     # 11. Final Purchase Verdict (6-Pillar Framework)
     pros = []
     cons = []
-    action_plan = []
+    action_plan = action_plan_hnwi if "action_plan_hnwi" in locals() else []
 
     drive_mins = int(float(assessment.distance_km) * 2.5)
 
@@ -724,21 +743,22 @@ def _timeline_result(assessment: Any, payload: dict[str, Any]) -> dict[str, Any]
         pros.append(f"Chính sách bán hàng: {project.payment_policy}.")
 
     # Cons & Risks (Chi tiết và cảnh báo rõ ràng)
-    if thb_ratio > Decimal("45"):
-        cons.append(f"Gánh nặng nhà ở cao ({thb_ratio:.1f}%): Chi phí tiền nhà ngốn gần một nửa thu nhập ròng hàng tháng.")
-    if real_fcf < Decimal("0"):
-        cons.append(f"Dòng tiền bị âm ({real_fcf/Decimal('1000000'):.1f} triệu/tháng): Gia đình phải bù lỗ sau khi thanh toán tiền nhà và sinh hoạt.")
-    elif real_fcf < Decimal("12000000"):
-        cons.append(f"Dòng tiền dự phòng còn mỏng: chỉ dư +{real_fcf/Decimal('1000000'):.1f} triệu/tháng, dễ gặp áp lực nếu có biến cố phát sinh.")
+    if not hnwi_strategy:
+        if thb_ratio > Decimal("45"):
+            cons.append(f"Gánh nặng nhà ở cao ({thb_ratio:.1f}%): Chi phí tiền nhà ngốn gần một nửa thu nhập ròng hàng tháng.")
+        if real_fcf < Decimal("0"):
+            cons.append(f"Dòng tiền bị âm ({real_fcf/Decimal(1000000):.1f} triệu/tháng): Gia đình phải bù lỗ sau khi thanh toán tiền nhà và sinh hoạt.")
+        elif real_fcf < Decimal("12000000"):
+            cons.append(f"Dòng tiền dự phòng còn mỏng: chỉ dư +{real_fcf/Decimal(1000000):.1f} triệu/tháng, dễ gặp áp lực nếu có biến cố phát sinh.")
 
-    if cash_remaining_after_move_in < Decimal("100000000"):
-        cons.append(f"Quỹ tiền mặt sau nhận nhà chỉ còn {cash_remaining_after_move_in/Decimal('1000000'):.1f} triệu (đệm sinh tồn {survival_runway_months:.1f} tháng - dưới mức 6 tháng khuyến nghị).")
+        if cash_remaining_after_move_in < Decimal("100000000"):
+            cons.append(f"Quỹ tiền mặt sau nhận nhà chỉ còn {cash_remaining_after_move_in/Decimal(1000000):.1f} triệu (đệm sinh tồn {survival_runway_months:.1f} tháng - dưới mức 6 tháng khuyến nghị).")
 
-    if payment_shock_ratio > Decimal("1.3"):
-        cons.append(f"Cú sốc bước nhảy lãi suất: Trả góp tháng 25 tăng {payment_shock_ratio:.1f} lần khi bước vào giai đoạn lãi thả nổi.")
+        if payment_shock_ratio > Decimal("1.3"):
+            cons.append(f"Cú sốc bước nhảy lãi suất: Trả góp tháng 25 tăng {payment_shock_ratio:.1f} lần khi bước vào giai đoạn lãi thả nổi.")
 
-    if is_default_risk:
-        cons.append("Nguy cơ thâm hụt dòng tiền khi Stress Test lãi suất tăng lên 15%.")
+        if is_default_risk:
+            cons.append("Nguy cơ thâm hụt dòng tiền khi Stress Test lãi suất tăng lên 15%.")
 
     if assessment.distance_km > Decimal("12.0"):
         cons.append(f"Khoảng cách khá xa ({assessment.distance_km:.1f} km, ~{drive_mins} phút di chuyển), phát sinh thêm chi phí đi lại.")
@@ -759,7 +779,17 @@ def _timeline_result(assessment: Any, payload: dict[str, Any]) -> dict[str, Any]
     pmt_mil = float(total_housing_cost / Decimal("1000000"))
     upfront_bil = float(total_upfront_needed / Decimal("1000000000"))
 
-    if thb_ratio <= Decimal("42") and real_fcf >= Decimal("15000000") and survival_runway_months >= Decimal("4.0") and not is_default_risk and cash_remaining_after_move_in >= Decimal("0"):
+    if hnwi_strategy:
+        verdict_status = "RECOMMENDED_BUY"
+        verdict_label = "MUA ĐỨT AN TOÀN HOẶC VAY ĐẦU TƯ"
+        verdict_badge = "safe"
+        verdict_headline = "VIP · TỰ DO TÀI CHÍNH · LỰA CHỌN KÉP"
+        plain_verdict_text = (
+            f"Tài chính siêu mạnh! Bạn hoàn toàn dư sức thanh toán đứt dự án này hoặc dùng đòn bẩy để tối ưu dòng vốn."
+        )
+        verdict_summary = "Khách hàng có quỹ tiền mặt lớn hơn giá trị tài sản, nắm hoàn toàn quyền chủ động giao dịch."
+        advice_action = "Chọn Mua đứt (nhận chiết khấu) hoặc Vay (lấy tiền mặt tái đầu tư)."
+    elif thb_ratio <= Decimal("42") and real_fcf >= Decimal("15000000") and survival_runway_months >= Decimal("4.0") and not is_default_risk and cash_remaining_after_move_in >= Decimal("0"):
         verdict_status = "RECOMMENDED_BUY"
         verdict_label = "ĐỦ ĐIỀU KIỆN MUA NGAY"
         verdict_badge = "safe"
@@ -862,9 +892,9 @@ def _timeline_result(assessment: Any, payload: dict[str, Any]) -> dict[str, Any]
             "market_updated": "T8/2026",
         },
         "urban_tier": urban_tier,
-        "rank_class": assessment.rank_class,
-        "hard_filter_status": assessment.hard_filter_status,
-        "status_label": assessment.status_label,
+        "rank_class": "A" if hnwi_strategy else assessment.rank_class,
+        "hard_filter_status": "PASS" if hnwi_strategy else assessment.hard_filter_status,
+        "status_label": "Đủ Điều Kiện (Vốn siêu mạnh)" if hnwi_strategy else assessment.status_label,
         "distance_km": assessment.distance_km,
         "matched_amenities": assessment.matched_amenities,
         "missing_amenities": assessment.missing_amenities,
@@ -888,6 +918,14 @@ def _timeline_result(assessment: Any, payload: dict[str, Any]) -> dict[str, Any]
             "mgmt_fee": float(assessment.value_for_money.mgmt_fee),
             "opportunity_cost_equity": float(assessment.value_for_money.opportunity_cost_equity),
             "tax_monthly": float(assessment.value_for_money.tax_monthly),
+        },
+        "hidden_costs_breakdown": {
+            "property_type": property_type,
+            "monthly_maintenance_depreciation": float(maintenance_depreciation_fee),
+            "monthly_parking": float(parking_fee),
+            "upfront_transfer_tax": float(transfer_tax_amount),
+            "upfront_maintenance_fund": float(maintenance_fund_amount),
+            "interior_furnishing": float(interior_furnishing),
         },
         "smart_amortization": {
             "has_intro_benefit": assessment.smart_amortization.has_intro_benefit,
@@ -995,6 +1033,7 @@ def _timeline_result(assessment: Any, payload: dict[str, Any]) -> dict[str, Any]
         "payment_scheme_evaluation": _build_payment_scheme_evaluation(
             project, payload, assessment, {"pmt_floating": pmt_floating, "pmt_intro": pmt_intro}
         ),
+        "hnwi_strategy": hnwi_strategy,
         "filter_summary": {
             "pass_count": sum(1 for h in assessment.hard_filters_breakdown if h.status == "PASS"),
             "warning_count": sum(1 for h in assessment.hard_filters_breakdown if h.status == "WARNING"),
@@ -1463,17 +1502,73 @@ def analyze(payload: dict[str, Any]) -> dict[str, Any]:
         default_intro_months = 12
         default_floating_rate = "10.5"
 
-    discount = dec(payload.get("discount_percent") or payload.get("project_discount_percent") or default_discount) / Decimal("100")
-    scenario = LoanScenario(
-        loan_ratio_percent=dec(payload.get("ltv_percent") if payload.get("ltv_percent") is not None else default_ltv),
-        term_years=int(payload.get("term_years") or payload.get("loan_term_years", 20)),
-        phase1_rate_percent=dec(payload.get("intro_rate_percent") or payload.get("interest_rate_intro") or default_intro_rate),
-        phase1_months=int(payload.get("intro_months") if payload.get("intro_months") is not None else (payload.get("intro_period_months") if payload.get("intro_period_months") is not None else default_intro_months)),
-        phase2_rate_percent=dec(payload.get("floating_rate_percent") or payload.get("interest_rate_floating") or default_floating_rate),
-        repayment_method=str(payload.get("repayment_method", "annuity")),
-        grace_type=str(payload.get("grace_type") or default_grace_type),
-        grace_months=int(payload.get("grace_months") if payload.get("grace_months") is not None else default_grace_months),
-    )
+    def build_scenario_for_project(project):
+        import copy
+        loc_payload = copy.deepcopy(payload)
+        base_scheme = str(loc_payload.get("payment_scheme") or ("loan_htls" if market_segment == "primary" else "bank_vcb"))
+        
+        # SMART RECOMMENDATION ENGINE (AUTO)
+        if base_scheme == "auto":
+            # For HNWI with excess cash, we simulate HTLS to show leverage, but we show Dual Options in the UI.
+            scheme_to_use = "loan_htls" if market_segment == "primary" else "bank_vcb"
+            loc_payload["payment_scheme"] = scheme_to_use
+        else:
+            scheme_to_use = base_scheme
+
+        loc_ltv = "70"
+        loc_intro_rate = "7.5"
+        loc_intro_months = 24
+        loc_floating_rate = "10.5"
+        loc_grace_months = 0
+        loc_grace_type = "none"
+        loc_discount = "0"
+
+        if scheme_to_use == "loan_htls":
+            loc_ltv = "70"
+            loc_intro_rate = "0.0"
+            loc_intro_months = 24
+            loc_grace_months = 24
+            loc_grace_type = "interest_only"
+            loc_floating_rate = "11.5"
+        elif scheme_to_use in ("standard_progress", "equity_100"):
+            loc_ltv = "0"
+            loc_intro_rate = "0.0"
+            loc_intro_months = 0
+            loc_grace_months = 0
+            loc_grace_type = "none"
+            loc_floating_rate = "0.0"
+        elif scheme_to_use == "early_payment":
+            loc_ltv = "0"
+            loc_intro_rate = "0.0"
+            loc_intro_months = 0
+            loc_grace_months = 0
+            loc_grace_type = "none"
+            loc_floating_rate = "0.0"
+            loc_discount = "10"
+        elif scheme_to_use == "bank_vcb":
+            loc_ltv = "70"
+            loc_intro_rate = "6.0"
+            loc_intro_months = 24
+            loc_floating_rate = "10.5"
+        elif scheme_to_use == "bank_bidv":
+            loc_ltv = "70"
+            loc_intro_rate = "5.5"
+            loc_intro_months = 12
+            loc_floating_rate = "10.5"
+            
+        discount = dec(loc_payload.get("discount_percent") or loc_payload.get("project_discount_percent") or loc_discount) / Decimal("100")
+        
+        scenario = LoanScenario(
+            loan_ratio_percent=dec(loc_payload.get("ltv_percent") if loc_payload.get("ltv_percent") is not None else loc_ltv),
+            term_years=int(loc_payload.get("term_years") or loc_payload.get("loan_term_years", 20)),
+            phase1_rate_percent=dec(loc_payload.get("intro_rate_percent") or loc_payload.get("interest_rate_intro") or loc_intro_rate),
+            phase1_months=int(loc_payload.get("intro_months") if loc_payload.get("intro_months") is not None else (loc_payload.get("intro_period_months") if loc_payload.get("intro_period_months") is not None else loc_intro_months)),
+            phase2_rate_percent=dec(loc_payload.get("floating_rate_percent") or loc_payload.get("interest_rate_floating") or loc_floating_rate),
+            repayment_method=str(loc_payload.get("repayment_method", "annuity")),
+            grace_type=str(loc_payload.get("grace_type") or loc_grace_type),
+            grace_months=int(loc_payload.get("grace_months") if loc_payload.get("grace_months") is not None else loc_grace_months),
+        )
+        return scenario, discount, loc_payload
 
     projects = load_projects_from_database()
     selected_ids = payload.get("selected_project_ids") or [project.id for project in projects[:5]]
@@ -1481,7 +1576,6 @@ def analyze(payload: dict[str, Any]) -> dict[str, Any]:
     if not selected:
         selected = projects[:5]
 
-    selected = [replace(project, price_min_vnd=project.price_min_vnd * (Decimal("1") - discount)) for project in selected]
     weights = load_persona_weights_from_database()
 
     workplace_lat = float(payload.get("workplace_lat", 21.0362))
@@ -1501,8 +1595,11 @@ def analyze(payload: dict[str, Any]) -> dict[str, Any]:
 
     results = []
     for project in selected:
+        scenario, discount, proj_payload = build_scenario_for_project(project)
+        discounted_project = replace(project, price_min_vnd=project.price_min_vnd * (Decimal("1") - discount))
+        
         assessment = assess_project(
-            project,
+            discounted_project,
             profile,
             scenario,
             persona,
@@ -1513,7 +1610,7 @@ def analyze(payload: dict[str, Any]) -> dict[str, Any]:
             client_age=client_age,
             cic_status=cic_status,
         )
-        results.append(_timeline_result(assessment, payload))
+        results.append(_timeline_result(assessment, proj_payload))
 
     # Sắp xếp ưu tiên: Hạng A lên đầu (theo điểm giảm dần), tiếp đến Hạng B, cuối cùng là Hạng C
     rank_order = {"A": 0, "B": 1, "C": 2}
