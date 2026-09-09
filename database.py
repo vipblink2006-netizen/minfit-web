@@ -15,6 +15,91 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
+
+try:
+    import psycopg2
+    from psycopg2.extras import NamedTupleCursor
+except ImportError:
+    psycopg2 = None
+
+def _convert_query(query: str) -> str:
+    result = []
+    in_single = False
+    in_double = False
+    i = 0
+    while i < len(query):
+        c = query[i]
+        if c == "'" and not in_double:
+            in_single = not in_single
+        elif c == '"' and not in_single:
+            in_double = not in_double
+        elif c == '?' and not in_single and not in_double:
+            result.append('%s')
+            i += 1
+            continue
+        result.append(c)
+        i += 1
+    
+    q = "".join(result)
+    # Simple patches for SQLite to Postgres
+    q = re.sub(r'\bINSERT OR IGNORE INTO\b', 'INSERT INTO', q, flags=re.IGNORECASE)
+    # REPLACE is a bit complex, we'll try to let ON CONFLICT DO NOTHING handle it if there's a unique constraint
+    # Or just replace INSERT OR REPLACE with INSERT for now, Postgres will throw error if conflict without ON CONFLICT.
+    # To be safe, we will add ON CONFLICT DO NOTHING for BrokerSelectedProjects since it's just associations.
+    if "INSERT OR REPLACE INTO ProjectAmenities" in q:
+        q = q.replace("INSERT OR REPLACE INTO", "INSERT INTO") + " ON CONFLICT (project_id, amenity_code) DO NOTHING"
+    if "INSERT OR REPLACE INTO Amenities" in q:
+        q = q.replace("INSERT OR REPLACE INTO", "INSERT INTO") + " ON CONFLICT (code) DO UPDATE SET label=EXCLUDED.label"
+    if "INSERT OR REPLACE INTO PersonaWeights" in q:
+        q = q.replace("INSERT OR REPLACE INTO", "INSERT INTO") + " ON CONFLICT (persona_code) DO UPDATE SET price_weight=EXCLUDED.price_weight, distance_weight=EXCLUDED.distance_weight, amenity_weight=EXCLUDED.amenity_weight"
+    if "BrokerSelectedProjects" in q and "INSERT INTO" in q:
+        if "ON CONFLICT" not in q:
+            q += " ON CONFLICT (broker_id, project_id) DO NOTHING"
+    if "INSERT OR IGNORE INTO Users" in q:
+        q = q.replace("INSERT OR IGNORE INTO", "INSERT INTO") + " ON CONFLICT (id) DO NOTHING"
+    return q
+
+class PostgresCursorWrapper:
+    def __init__(self, cursor):
+        self._cursor = cursor
+    def execute(self, query, params=None):
+        query = _convert_query(query)
+        if params is not None:
+            if isinstance(params, tuple) and len(params) == 0:
+                self._cursor.execute(query)
+            else:
+                self._cursor.execute(query, params)
+        else:
+            self._cursor.execute(query)
+        return self
+    def fetchone(self): return self._cursor.fetchone()
+    def fetchall(self): return self._cursor.fetchall()
+    def fetchval(self): 
+        row = self._cursor.fetchone()
+        return row[0] if row else None
+
+class PostgresConnectionWrapper:
+    def __init__(self, conn):
+        self._conn = conn
+    def cursor(self):
+        return PostgresCursorWrapper(self._conn.cursor(cursor_factory=NamedTupleCursor))
+    def execute(self, query, params=None):
+        cur = self.cursor()
+        cur.execute(query, params)
+        return cur
+    def executescript(self, script):
+        cur = self.cursor()
+        cur._cursor.execute(script)
+        return cur
+    def commit(self):
+        self._conn.commit()
+    def close(self):
+        self._conn.close()
+    def __enter__(self): return self
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.close()
+
+
 try:
     import pyodbc
 except ImportError:  # macOS local fallback
@@ -56,7 +141,9 @@ def settings() -> tuple[str, str, str]:
     server = os.getenv("MINFIT_SQL_SERVER", "sqlite" if platform.system() != "Windows" else DEFAULT_SERVER).strip()
     database = os.getenv("MINFIT_SQL_DATABASE", DEFAULT_DATABASE).strip()
     driver = os.getenv("MINFIT_SQL_DRIVER", DEFAULT_DRIVER).strip()
-    if not re.fullmatch(r"[A-Za-z0-9_]+", database):
+    if server.lower() in ("postgres", "supabase"):
+        return server, os.getenv("MINFIT_POSTGRES_URL", "").strip(), "postgres"
+    if server.lower() not in ("postgres", "supabase") and not re.fullmatch(r"[A-Za-z0-9_]+", database):
         raise ValueError("Tên database không hợp lệ.")
     if server.lower() == "sqlite":
         return server, database, driver
@@ -64,7 +151,6 @@ def settings() -> tuple[str, str, str]:
     if not server.lower().startswith(local_hosts):
         raise ValueError("MinFit chỉ cho phép kết nối SQL Server local.")
     return server, database, driver
-
 
 
 def _assert_sql_service_running(server: str) -> None:
@@ -106,7 +192,14 @@ def connection_string(database: str | None = None) -> str:
 
 
 def connect(database: str | None = None, autocommit: bool = False) -> Any:
-    server, _, _ = settings()
+    server, db_url, _ = settings()
+    if server.lower() in ("postgres", "supabase"):
+        if psycopg2 is None:
+            raise ConnectionError("Thiếu psycopg2-binary để kết nối PostgreSQL.")
+        conn = psycopg2.connect(db_url)
+        if autocommit:
+            conn.autocommit = True
+        return PostgresConnectionWrapper(conn)
     if server.lower() == "sqlite":
         sqlite_path = Path(os.getenv("MINFIT_SQLITE_PATH", str(SQLITE_PATH))).expanduser()
         sqlite_path.parent.mkdir(parents=True, exist_ok=True)
@@ -126,6 +219,9 @@ def connect(database: str | None = None, autocommit: bool = False) -> Any:
 
 def ensure_database() -> DatabaseStatus:
     server, database_name, _ = settings()
+
+    if server.lower() in ("postgres", "supabase"):
+        return _ensure_postgres_database()
     if server.lower() == "sqlite":
         return _ensure_sqlite_database(database_name)
     with connect("master", autocommit=True) as master:
@@ -296,6 +392,86 @@ def _sqlite_ready(database_name: str) -> None:
         _ensure_sqlite_database(database_name)
 
 
+
+def _ensure_postgres_database():
+    with connect(autocommit=True) as connection:
+        connection.executescript('''
+        CREATE TABLE IF NOT EXISTS Projects (
+            id VARCHAR(50) PRIMARY KEY,
+            name VARCHAR(200) NOT NULL,
+            area VARCHAR(100) NOT NULL,
+            developer VARCHAR(200) DEFAULT '',
+            price_min_vnd NUMERIC(19, 2) NOT NULL,
+            price_avg_mil_m2 FLOAT DEFAULT 0,
+            price_min_mil_m2 FLOAT DEFAULT 0,
+            price_max_mil_m2 FLOAT DEFAULT 0,
+            area_m2 NUMERIC(10, 2) NOT NULL,
+            area_min_m2 FLOAT DEFAULT 0,
+            area_max_m2 FLOAT DEFAULT 0,
+            layout_types VARCHAR(100) DEFAULT '',
+            lat NUMERIC(10, 7) NOT NULL,
+            lng NUMERIC(10, 7) NOT NULL,
+            management_fee_per_m2 NUMERIC(19, 2) NOT NULL,
+            bedrooms VARCHAR(30) NOT NULL,
+            raw_amenities TEXT DEFAULT '',
+            handover_status VARCHAR(100) DEFAULT '',
+            handover_year INTEGER DEFAULT 0,
+            is_handed_over INTEGER DEFAULT 0,
+            payment_policy TEXT DEFAULT '',
+            grace_period_months INTEGER DEFAULT 0,
+            inventory_link TEXT DEFAULT '',
+            risk_note TEXT DEFAULT '',
+            is_global INTEGER DEFAULT 1,
+            created_by_role VARCHAR(30) DEFAULT 'admin',
+            broker_id VARCHAR(50) DEFAULT NULL,
+            approval_status VARCHAR(30) DEFAULT 'approved',
+            crawl_url TEXT DEFAULT '',
+            crawl_frequency VARCHAR(30) DEFAULT 'daily',
+            links_json TEXT DEFAULT '{}',
+            units_json TEXT DEFAULT '[]',
+            raw_source_text TEXT DEFAULT '',
+            is_active INTEGER NOT NULL DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE IF NOT EXISTS Amenities (
+            code VARCHAR(30) PRIMARY KEY,
+            label VARCHAR(100) NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS ProjectAmenities (
+            project_id VARCHAR(50) NOT NULL,
+            amenity_code VARCHAR(30) NOT NULL,
+            PRIMARY KEY (project_id, amenity_code)
+        );
+        CREATE TABLE IF NOT EXISTS PersonaWeights (
+            persona_code VARCHAR(30) PRIMARY KEY,
+            price_weight NUMERIC(3, 2) NOT NULL,
+            distance_weight NUMERIC(3, 2) NOT NULL,
+            amenity_weight NUMERIC(3, 2) NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS BrokerSelectedProjects (
+            broker_id VARCHAR(50) NOT NULL,
+            project_id VARCHAR(50) NOT NULL,
+            PRIMARY KEY (broker_id, project_id)
+        );
+        CREATE TABLE IF NOT EXISTS Users (
+            id VARCHAR(50) PRIMARY KEY,
+            name VARCHAR(100) NOT NULL,
+            email VARCHAR(100),
+            phone VARCHAR(20),
+            password_hash TEXT DEFAULT '',
+            role VARCHAR(20) DEFAULT 'user',
+            agency VARCHAR(100),
+            status VARCHAR(20) DEFAULT 'active',
+            clients_count INTEGER DEFAULT 0,
+            projects_count INTEGER DEFAULT 0,
+            units_sold INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            last_active TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        ''')
+    return DatabaseStatus("postgres", "minfit", 0, 0)
+
 def _ensure_sqlite_database(database_name: str) -> DatabaseStatus:
     raw_projects = json.loads(PROJECTS_JSON.read_text(encoding="utf-8"))
     with connect() as connection:
@@ -390,7 +566,7 @@ def _ensure_sqlite_database(database_name: str) -> DatabaseStatus:
         """)
 
         for code, label in AMENITY_LABELS.items():
-            connection.execute("INSERT OR REPLACE INTO Amenities(code,label) VALUES (?,?)", (code, label))
+            connection.execute("INSERT INTO Amenities(code,label) ON CONFLICT(code) DO UPDATE SET label=EXCLUDED.label VALUES (?,?)", (code, label))
 
         for item in raw_projects:
             connection.execute(
