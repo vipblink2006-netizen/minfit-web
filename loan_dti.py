@@ -224,7 +224,7 @@ def simulate_loan(
         if month == scenario.term_months and abs(balance) < Decimal("0.01"):
             balance = ZERO
 
-        dti = (payment + profile.existing_debt_payment) / profile.monthly_income
+        dti = (payment + profile.existing_debt_payment) / profile.monthly_income if profile.monthly_income > ZERO else ZERO
         free_cash_flow = profile.monthly_income - (
             payment
             + profile.existing_debt_payment

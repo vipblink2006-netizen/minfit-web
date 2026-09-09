@@ -517,8 +517,6 @@ def _timeline_result(assessment: Any, payload: dict[str, Any]) -> dict[str, Any]
 
     # 1. Net Acceptable Income (10% Risk Discount)
     declared_income = dec(payload.get("monthly_income"), "65000000")
-    if declared_income <= Decimal("0"):
-        declared_income = Decimal("65000000")
     risk_discount_amount = declared_income * Decimal("0.10")
     net_acceptable_income = max(Decimal("10000000"), declared_income - risk_discount_amount)
 
@@ -553,24 +551,26 @@ def _timeline_result(assessment: Any, payload: dict[str, Any]) -> dict[str, Any]
     building_mgmt_fee = project.monthly_management_fee
     transport_mode = str(payload.get("transport_mode", "motorbike"))
     has_car = bool(payload.get("has_car", transport_mode == "car"))
-    
+    project_price = project.price_min_vnd
+
     parking_fee = Decimal("0")
     maintenance_depreciation_fee = Decimal("0")
-    transfer_tax_amount = Decimal("0")
-    maintenance_fund_amount = Decimal("0")
-    
+
     if property_type == "tho_cu":
         building_mgmt_fee = Decimal("0")
-        maintenance_depreciation_fee = Decimal("3000000") # Chi phí duy tu, hỏng hóc nhà thứ cấp
-        transfer_tax_amount = project.price_min_vnd * Decimal("0.025") # Thuế TNCN (2%), Lệ phí trước bạ (0.5%)
+        maintenance_depreciation_fee = Decimal("3000000")  # Chi phí duy tu, hỏng hóc nhà thứ cấp
+        transfer_tax_amount = project_price * Decimal("0.025")  # Thuế TNCN (2%) + Lệ phí trước bạ (0.5%)
+        maintenance_fund_amount = Decimal("0")
         if has_car and not bool(payload.get("has_garage", False)):
             parking_fee = Decimal("2500000")
     elif property_type == "thap_tang":
         maintenance_depreciation_fee = Decimal("2000000")
-        maintenance_fund_amount = project.price_min_vnd * Decimal("0.01")
-    else: # chung_cu
+        transfer_tax_amount = project_price * Decimal("0.005")
+        maintenance_fund_amount = project_price * Decimal("0.01")
+    else:  # chung_cu
         parking_fee = Decimal("1500000") if has_car else Decimal("300000")
-        maintenance_fund_amount = project.price_min_vnd * Decimal("0.02")
+        transfer_tax_amount = project_price * Decimal("0.005")
+        maintenance_fund_amount = project_price * Decimal("0.02")
 
     total_housing_fees = building_mgmt_fee + parking_fee + maintenance_depreciation_fee
 
@@ -602,10 +602,6 @@ def _timeline_result(assessment: Any, payload: dict[str, Any]) -> dict[str, Any]
         fcf_remark = "Âm dòng tiền: Nguy cơ thiếu hụt thanh khoản, phải vay bù hàng tháng."
 
     # 7. Move-in Initial Capex & Survival Runway
-    project_price = project.price_min_vnd
-    property_type = getattr(project, 'property_type', 'chung_cu')
-    transfer_tax_amount = project_price * Decimal("0.025") if property_type == "tho_cu" else project_price * Decimal("0.005")
-    maintenance_fund_amount = project_price * Decimal("0.01") if property_type == "thap_tang" else (Decimal("0") if property_type == "tho_cu" else project_price * Decimal("0.02"))
     interior_furnishing = project.area_m2 * Decimal("2800000")  # ~2.8tr/m2 basic fit-out
     initial_move_in_capex = maintenance_fund_amount + transfer_tax_amount + interior_furnishing
     maintenance_fund_2pct = maintenance_fund_amount
@@ -614,8 +610,6 @@ def _timeline_result(assessment: Any, payload: dict[str, Any]) -> dict[str, Any]
     down_payment = assessment.down_payment
     total_upfront_needed = down_payment + initial_move_in_capex
     available_cash = dec(payload.get("available_cash"), "1500000000")
-    if available_cash <= Decimal("0"):
-        available_cash = Decimal("1500000000")
     cash_remaining_after_move_in = available_cash - total_upfront_needed
 
     hnwi_strategy = None
@@ -811,7 +805,7 @@ def _timeline_result(assessment: Any, payload: dict[str, Any]) -> dict[str, Any]
             f"Khuyến nghị kéo dài thời hạn vay từ 20 năm lên 25 - 30 năm để giảm số tiền trả nợ mỗi tháng, "
             f"giữ đệm an toàn tài chính cho gia đình."
         )
-        min_runway_months = Decimal("12") if getattr(profile, 'income_stability', 'salaried') == "freelance_business" else Decimal("6")
+        min_runway_months = Decimal("12") if str(payload.get('income_stability', 'salaried')) == "freelance_business" else Decimal("6")
         min_reserve = min_runway_months * total_living_cost
         
         verdict_summary = "Phương án khả thi nhưng cần kéo dài kỳ hạn vay hoặc tăng vốn tự có để giảm áp lực chi trả hàng tháng."
@@ -1035,9 +1029,9 @@ def _timeline_result(assessment: Any, payload: dict[str, Any]) -> dict[str, Any]
         ),
         "hnwi_strategy": hnwi_strategy,
         "filter_summary": {
-            "pass_count": sum(1 for h in assessment.hard_filters_breakdown if h.status == "PASS"),
-            "warning_count": sum(1 for h in assessment.hard_filters_breakdown if h.status == "WARNING"),
-            "fail_count": sum(1 for h in assessment.hard_filters_breakdown if h.status == "FAIL"),
+            "pass_count": sum(1 for h in assessment.hard_filters_breakdown if h.status == "safe"),
+            "warning_count": sum(1 for h in assessment.hard_filters_breakdown if h.status == "warning"),
+            "fail_count": sum(1 for h in assessment.hard_filters_breakdown if h.status == "reject"),
             "total": len(assessment.hard_filters_breakdown),
         },
         "rejection_reasons": assessment.rejection_reasons,
