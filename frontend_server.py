@@ -212,9 +212,10 @@ class ReactRouterHandler(SimpleHTTPRequestHandler):
                 is_active = bool(payload.get("is_active", True))
                 self._send_json(toggle_project_status(pid, is_active))
             elif endpoint == "/api/projects/delete":
-                if not self._require_auth(allowed_roles=["admin"]): return
+                session = self._require_auth(allowed_roles=["admin", "broker"])
+                if not session: return
                 pid = str(payload.get("project_id", ""))
-                self._send_json(delete_project(pid))
+                self._send_json(delete_project(pid, role=session["role"], broker_id=session.get("user_id", "")))
             elif endpoint == "/api/broker/selection":
                 session = self._require_auth(allowed_roles=["broker", "admin"])
                 if not session: return

@@ -96,6 +96,9 @@ class PostgresCursorWrapper:
     def fetchval(self): 
         row = self._cursor.fetchone()
         return row[0] if row else None
+    @property
+    def rowcount(self):
+        return self._cursor.rowcount
 
 class PostgresConnectionWrapper:
     def __init__(self, conn):
@@ -835,9 +838,12 @@ def save_project_to_db(data: dict[str, Any]) -> str:
     return pid
 
 
-def delete_project_from_db(project_id: str) -> bool:
+def delete_project_from_db(project_id: str, required_broker_id: str = None) -> bool:
     with connect() as connection:
-        res = connection.execute("DELETE FROM Projects WHERE id=?", (project_id,))
+        if required_broker_id:
+            res = connection.execute("DELETE FROM Projects WHERE id=? AND broker_id=?", (project_id, required_broker_id))
+        else:
+            res = connection.execute("DELETE FROM Projects WHERE id=?", (project_id,))
         connection.commit()
         return res.rowcount > 0
 

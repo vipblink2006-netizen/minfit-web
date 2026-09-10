@@ -1483,8 +1483,9 @@ def create_or_update_project(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def delete_project(project_id: str) -> dict[str, Any]:
-    deleted = delete_project_from_db(project_id)
+def delete_project(project_id: str, role: str = "admin", broker_id: str = "") -> dict[str, Any]:
+    req_broker = broker_id if role == "broker" else None
+    deleted = delete_project_from_db(project_id, req_broker)
     return {
         "success": deleted,
         "message": "Đã xóa dự án khỏi kho hàng." if deleted else "Không tìm thấy dự án để xóa."
