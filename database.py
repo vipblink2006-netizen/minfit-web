@@ -814,7 +814,7 @@ def save_project_to_db(data: dict[str, Any]) -> str:
                 lat=excluded.lat, lng=excluded.lng, management_fee_per_m2=excluded.management_fee_per_m2, bedrooms=excluded.bedrooms,
                 raw_amenities=excluded.raw_amenities, handover_status=excluded.handover_status, handover_year=excluded.handover_year,
                 is_handed_over=excluded.is_handed_over, payment_policy=excluded.payment_policy, grace_period_months=excluded.grace_period_months,
-                inventory_link=excluded.inventory_link, risk_note=excluded.risk_note, is_global=excluded.is_global,
+                inventory_link=excluded.inventory_link, risk_note=excluded.risk_note, is_global=excluded.is_global, broker_id=excluded.broker_id,
                 approval_status=excluded.approval_status, crawl_url=excluded.crawl_url, crawl_frequency=excluded.crawl_frequency,
                 links_json=excluded.links_json, units_json=excluded.units_json, raw_source_text=excluded.raw_source_text,
                 is_active=excluded.is_active, updated_at=CURRENT_TIMESTAMP
