@@ -352,6 +352,7 @@ def _ensure_workflow_tables() -> None:
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
             ''')
+            connection.commit()
         else:
             connection.executescript('''
             CREATE TABLE IF NOT EXISTS clients (
@@ -366,15 +367,15 @@ def _ensure_workflow_tables() -> None:
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP
             );
             ''')
-        try:
-            connection.execute("ALTER TABLE clients ADD COLUMN broker_id TEXT DEFAULT 'broker_default'")
-        except Exception:
-            pass
-        try:
-            connection.execute("ALTER TABLE clients ADD COLUMN units_sold INTEGER DEFAULT 0")
-        except Exception:
-            pass
-        connection.commit()
+            try:
+                connection.execute("ALTER TABLE clients ADD COLUMN broker_id TEXT DEFAULT 'broker_default'")
+            except Exception:
+                pass
+            try:
+                connection.execute("ALTER TABLE clients ADD COLUMN units_sold INTEGER DEFAULT 0")
+            except Exception:
+                pass
+            connection.commit()
 
 def _get_district_tier(district_name: str) -> int:
     return DISTRICT_TIERS.get(district_name.strip(), 2)
