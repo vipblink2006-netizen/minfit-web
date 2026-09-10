@@ -8,10 +8,16 @@ import re
 import secrets
 import sqlite3
 
-def row_to_row_to_dict(row):
+def to_dict(row):
     if hasattr(row, "_asdict"):
         return row._asdict()
-    return row_to_dict(row)
+    if hasattr(row, "_fields"): 
+        return dict(zip(row._fields, row))
+    return dict(row)
+
+
+
+
 import subprocess
 import time
 from dataclasses import dataclass
@@ -638,7 +644,7 @@ def load_projects_from_database(include_inactive: bool = False, broker_id: str |
         with connect() as connection:
             rows = connection.execute(query, params).fetchall()
         for row in rows:
-            r = row_to_dict(row)
+            r = to_dict(row)
             amenity = r.pop("amenity_code", None)
             item = grouped.setdefault(
                 r["id"],
@@ -871,7 +877,7 @@ def verify_session(token: str) -> dict[str, Any] | None:
         ).fetchone()
         if not row:
             return None
-        session = row_to_dict(row)
+        session = to_dict(row)
         expires_at_str = session.get("expires_at", "")
         try:
             expires_at = datetime.fromisoformat(expires_at_str)
@@ -982,7 +988,7 @@ def list_users_from_db() -> list[dict[str, Any]]:
         user_rows = connection.execute("SELECT * FROM Users ORDER BY role DESC, created_at DESC").fetchall()
         result = []
         for ur in user_rows:
-            u = row_to_dict(ur)
+            u = to_dict(ur)
             uid = u["id"]
             # Fetch actual clients created by this user
             client_rows = connection.execute(
@@ -992,7 +998,7 @@ def list_users_from_db() -> list[dict[str, Any]]:
             client_list = []
             total_sold = 0
             for cr in client_rows:
-                c = row_to_dict(cr)
+                c = to_dict(cr)
                 if c.get("profile_json"):
                     try:
                         c["profile"] = json.loads(c["profile_json"])
@@ -1056,7 +1062,7 @@ def toggle_user_status_in_db(user_id: str) -> dict[str, Any]:
 def get_user_stats_from_db() -> dict[str, Any]:
     with connect() as connection:
         _ensure_users_table_and_seeds(connection)
-        users = [row_to_dict(r) for r in connection.execute("SELECT * FROM Users").fetchall()]
+        users = [to_dict(r) for r in connection.execute("SELECT * FROM Users").fetchall()]
         total_users = len(users)
         active_brokers = len([u for u in users if u["role"] == "broker" and u["status"] == "active"])
         
