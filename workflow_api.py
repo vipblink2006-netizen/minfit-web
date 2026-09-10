@@ -613,13 +613,13 @@ def _timeline_result(assessment: Any, payload: dict[str, Any]) -> dict[str, Any]
     fcf_mil_temp = float(real_fcf / Decimal("1000000"))
     if real_fcf >= Decimal("15000000"):
         fcf_status = "safe"
-        fcf_remark = "🎯 Dư dả an toàn: Sau khi đóng tiền nhà vẫn dư tiền đầu tư, tích lũy và hưởng thụ cuộc sống."
+        fcf_remark = "Dư dả an toàn: Sau khi đóng tiền nhà vẫn dư tiền đầu tư, tích lũy và hưởng thụ cuộc sống."
     elif real_fcf >= Decimal("0"):
         fcf_status = "caution"
-        fcf_remark = "⚡ Vùng đệm vừa vặn: Đủ sống nhưng cần chi tiêu có kế hoạch, đề phòng rủi ro lãi suất thả nổi."
+        fcf_remark = "Vùng đệm vừa vặn: Đủ sống nhưng cần chi tiêu có kế hoạch, đề phòng rủi ro lãi suất thả nổi."
     else:
         fcf_status = "danger"
-        fcf_remark = f"🚨 Âm dòng tiền (-{abs(fcf_mil_temp):.1f} tr/tháng): Nguy cơ kiệt quệ thanh khoản! Đề xuất đổi căn nhỏ hơn hoặc bổ sung người đồng vay."
+        fcf_remark = f"Âm dòng tiền (-{abs(fcf_mil_temp):.1f} tr/tháng): Nguy cơ kiệt quệ thanh khoản! Đề xuất đổi căn nhỏ hơn hoặc bổ sung người đồng vay."
 
     # 7. Move-in Initial Capex & Survival Runway
     interior_furnishing = project.area_m2 * Decimal("2800000")  # ~2.8tr/m2 basic fit-out
@@ -687,9 +687,9 @@ def _timeline_result(assessment: Any, payload: dict[str, Any]) -> dict[str, Any]
         suggested_term = 30 if term_years < 30 else 35
         suggested_pmt = round((pmt_after * Decimal(term_years) / Decimal(suggested_term)) / Decimal("1000000"), 1)
         shock_suggestion = (
-            f"⚠️ RỦI RO VỠ NỢ THÁNG {shock_month} (khi bước sang tháng {shock_month} hết ân hạn CĐT): Tiền gốc lãi nhảy vọt {payment_shock_ratio:.1f} lần "
+            f"RỦI RO VỠ NỢ THÁNG {shock_month} (khi bước sang tháng {shock_month} hết ân hạn CĐT): Tiền gốc lãi nhảy vọt {payment_shock_ratio:.1f} lần "
             f"(từ {pmt_before/Decimal('1000000'):.1f} tr lên {pmt_after/Decimal('1000000'):.1f} tr/tháng), "
-            f"khiến dòng tiền gia đình chịu áp lực lớn! 👉 GIẢI PHÁP CHỐT SALE CHO MÔI GIỚI: "
+            f"khiến dòng tiền gia đình chịu áp lực lớn! GIẢI PHÁP CHỐT SALE CHO MÔI GIỚI: "
             f"1) Tư vấn kéo dài kỳ hạn vay từ {term_years} năm lên {suggested_term} năm để hạ tiền đóng xuống ~{suggested_pmt} tr/tháng; "
             f"2) Hướng dẫn khách chuẩn bị gói vay người thân hoặc tích lũy quỹ trả trước từ năm 1; "
             f"3) Chủ động chuyển hướng sang căn 2PN diện tích tối ưu hơn trong cùng dự án."
@@ -766,20 +766,20 @@ def _timeline_result(assessment: Any, payload: dict[str, Any]) -> dict[str, Any]
     # Cons & Risks (Đánh thẳng vào nỗi đau tài chính & Gợi ý giải pháp)
     if not hnwi_strategy:
         if thb_ratio > Decimal("45"):
-            cons.append(f"🔥 GÁNH NẶNG NHÀ Ở BÁO ĐỘNG ({thb_ratio:.1f}%): Chi phí tiền nhà ngốn gần một nửa thu nhập ròng, khiến chất lượng sống bị thắt chặt nếu không tái cấu trúc gói vay.")
+            cons.append(f"GÁNH NẶNG NHÀ Ở BÁO ĐỘNG ({thb_ratio:.1f}%): Chi phí tiền nhà ngốn gần một nửa thu nhập ròng, khiến chất lượng sống bị thắt chặt nếu không tái cấu trúc gói vay.")
         if real_fcf < Decimal("0"):
-            cons.append(f"🚨 BÁO ĐỘNG ĐỎ DÒNG TIỀN: Mỗi tháng bị hụt {-real_fcf/Decimal('1000000'):.1f} triệu sau khi đóng tiền nhà và sinh hoạt. Cần giãn nợ hoặc đổi phương án căn hộ để không bị kiệt quệ.")
+            cons.append(f"BÁO ĐỘNG ĐỎ DÒNG TIỀN: Mỗi tháng bị hụt {-real_fcf/Decimal('1000000'):.1f} triệu sau khi đóng tiền nhà và sinh hoạt. Cần giãn nợ hoặc đổi phương án căn hộ để không bị kiệt quệ.")
         elif real_fcf < Decimal("12000000"):
-            cons.append(f"⚡ VÙNG ĐỆM MỎNG: Tiền dư ví chỉ còn +{real_fcf/Decimal('1000000'):.1f} triệu/tháng, rất dễ rơi vào bẫy nợ nếu có biến cố phát sinh. Khuyến nghị kéo dài kỳ hạn vay.")
+            cons.append(f"VÙNG ĐỆM MỎNG: Tiền dư ví chỉ còn +{real_fcf/Decimal('1000000'):.1f} triệu/tháng, rất dễ rơi vào bẫy nợ nếu có biến cố phát sinh. Khuyến nghị kéo dài kỳ hạn vay.")
 
         if cash_remaining_after_move_in < Decimal("100000000"):
-            cons.append(f"⚠️ NGUY CƠ 'CHÁY VÍ' SAU NHẬN NHÀ: Quỹ tiền mặt sau nhận nhà chỉ còn {cash_remaining_after_move_in/Decimal('1000000'):.1f} triệu (đệm sinh tồn {survival_runway_months:.1f} tháng - dưới mức 6 tháng chuẩn). Khuyên khách tiết giảm gói nội thất ban đầu.")
+            cons.append(f"NGUY CƠ 'CHÁY VÍ' SAU NHẬN NHÀ: Quỹ tiền mặt sau nhận nhà chỉ còn {cash_remaining_after_move_in/Decimal('1000000'):.1f} triệu (đệm sinh tồn {survival_runway_months:.1f} tháng - dưới mức 6 tháng chuẩn). Khuyên khách tiết giảm gói nội thất ban đầu.")
 
         if payment_shock_ratio > Decimal("1.3"):
-            cons.append(f"⚠️ Cú sốc bước nhảy lãi suất (Tháng hết ân hạn): Tiền trả góp tăng gấp {payment_shock_ratio:.1f} lần khi sang giai đoạn thả nổi. Môi giới cần lên ngay kịch bản giãn nợ 30-35 năm.")
+            cons.append(f"Cú sốc bước nhảy lãi suất (Tháng hết ân hạn): Tiền trả góp tăng gấp {payment_shock_ratio:.1f} lần khi sang giai đoạn thả nổi. Môi giới cần lên ngay kịch bản giãn nợ 30-35 năm.")
 
         if is_default_risk:
-            cons.append("⛔ RỦI RO THÂM HỤT KHI LÃI THẢ NỔI 15%: Áp lực trả góp có thể vượt quá khả năng chi trả. Cần phương án dự phòng người đồng vay.")
+            cons.append("RỦI RO THÂM HỤT KHI LÃI THẢ NỔI 15%: Áp lực trả góp có thể vượt quá khả năng chi trả. Cần phương án dự phòng người đồng vay.")
 
     if assessment.distance_km > Decimal("12.0"):
         cons.append(f"Khoảng cách khá xa ({assessment.distance_km:.1f} km, ~{drive_mins} phút di chuyển), phát sinh thêm chi phí đi lại.")
@@ -804,7 +804,7 @@ def _timeline_result(assessment: Any, payload: dict[str, Any]) -> dict[str, Any]
         verdict_status = "RECOMMENDED_BUY"
         verdict_label = "MUA ĐỨT AN TOÀN HOẶC VAY ĐẦU TƯ"
         verdict_badge = "safe"
-        verdict_headline = "👑 VIP · TỰ DO TÀI CHÍNH · LỰA CHỌN KÉP"
+        verdict_headline = "VIP · TỰ DO TÀI CHÍNH · LỰA CHỌN KÉP"
         plain_verdict_text = (
             f"Tài chính siêu mạnh! Bạn hoàn toàn dư sức thanh toán đứt dự án này hoặc dùng đòn bẩy HTLS 0% để tối ưu dòng vốn đầu tư."
         )
@@ -814,28 +814,28 @@ def _timeline_result(assessment: Any, payload: dict[str, Any]) -> dict[str, Any]
         verdict_status = "RECOMMENDED_BUY"
         verdict_label = "ĐỦ ĐIỀU KIỆN MUA NGAY"
         verdict_badge = "safe"
-        verdict_headline = "🟢 HẠNG A · CƠ HỘI VÀNG ĐẶT CỌC · VỪA VẶN TÀI CHÍNH 100%"
+        verdict_headline = "HẠNG A · CƠ HỘI VÀNG ĐẶT CỌC · VỪA VẶN TÀI CHÍNH 100%"
         plain_verdict_text = (
             f"Phương án rất an toàn cho gia đình! Chi phí nhà ở chỉ chiếm {thb_ratio:.0f}% thu nhập ròng. "
             f"Sau khi chi trả gốc lãi và sinh hoạt thoải mái, gia đình vẫn DƯ DẢ {fcf_str} trong ví để tích lũy đầu tư và tự tin tất toán sạch nợ sau ~{early_payoff_years or 8} năm."
         )
         verdict_summary = "Cấu trúc tài chính hoàn hảo: Vừa vặn chi trả, dòng tiền thặng dư dồi dào, an toàn tuyệt đối trước biến động."
-        advice_action = f"🎯 HÀNH ĐỘNG MÔI GIỚI: Khách hàng đủ điều kiện mua an toàn 100%. Khuyên khách tiến hành đặt cọc giữ căn đẹp ngay hôm nay trước khi hết suất ưu đãi hoặc tăng giá."
+        advice_action = f"HÀNH ĐỘNG MÔI GIỚI: Khách hàng đủ điều kiện mua an toàn 100%. Khuyên khách tiến hành đặt cọc giữ căn đẹp ngay hôm nay trước khi hết suất ưu đãi hoặc tăng giá."
     elif thb_ratio <= Decimal("50") and real_fcf >= Decimal("0") and cash_remaining_after_move_in >= Decimal("-100000000"):
         verdict_status = "CONDITIONAL_BUY"
         verdict_label = "CÂN NHẮC · CẦN TÁI CẤU TRÚC"
         verdict_badge = "warning"
-        verdict_headline = "🟡 HẠNG B · CẢNH BÁO RỦI RO · CẦN TÁI CẤU TRÚC ĐỂ CHỐT SALE"
+        verdict_headline = "HẠNG B · CẢNH BÁO RỦI RO · CẦN TÁI CẤU TRÚC ĐỂ CHỐT SALE"
         plain_verdict_text = (
             f"Căn hộ rất đẹp nhưng dòng tiền hàng tháng đang sát nút (chiếm {thb_ratio:.0f}% thu nhập, tiền dư ví chỉ còn {fcf_str}). "
             f"Nếu giữ nguyên gói vay hiện tại, gia đình sẽ chịu áp lực lớn khi hết ân hạn. "
-            f"👉 GIẢI PHÁP: Kéo dài kỳ hạn vay lên 25 - 30 năm để giảm số tiền trả nợ mỗi tháng về mức an toàn."
+            f"GIẢI PHÁP: Kéo dài kỳ hạn vay lên 25 - 30 năm để giảm số tiền trả nợ mỗi tháng về mức an toàn."
         )
         min_runway_months = Decimal("12") if str(payload.get('income_stability', 'salaried')) == "freelance_business" else Decimal("6")
         min_reserve = min_runway_months * total_living_cost
         
         verdict_summary = "Phương án khả thi nhưng cần kéo dài kỳ hạn vay hoặc chọn gói HTLS để giữ đệm an toàn cho gia đình."
-        advice_action = f"⚡ CỚ NÓI CHUYỆN VỚI KHÁCH: Đừng vội bỏ cuộc - Hãy tư vấn khách kéo dài kỳ hạn vay lên 25-30 năm hoặc giãn tiến độ để giữ lại căn hộ ưng ý mà không bị áp lực nợ."
+        advice_action = f"CỚ NÓI CHUYỆN VỚI KHÁCH: Đừng vội bỏ cuộc - Hãy tư vấn khách kéo dài kỳ hạn vay lên 25-30 năm hoặc giãn tiến độ để giữ lại căn hộ ưng ý mà không bị áp lực nợ."
         if shock_suggestion:
             action_plan.append(shock_suggestion)
         if cash_remaining_after_move_in < min_reserve:
@@ -844,7 +844,7 @@ def _timeline_result(assessment: Any, payload: dict[str, Any]) -> dict[str, Any]
         verdict_status = "DO_NOT_BUY"
         verdict_label = "CHƯA NÊN MUA DỰ ÁN NÀY"
         verdict_badge = "danger"
-        verdict_headline = "🔴 HẠNG C · NGUY HIỂM TÀI CHÍNH · CẦN CHUYỂN HƯỚNG DỰ ÁN KHÁC"
+        verdict_headline = "HẠNG C · NGUY HIỂM TÀI CHÍNH · CẦN CHUYỂN HƯỚNG DỰ ÁN KHÁC"
         if fcf_mil < 0:
             deficit_reason = f"khiến gia đình bị âm dòng tiền ({fcf_str}) sau khi tính đủ sinh hoạt"
         elif cash_remaining_after_move_in < Decimal("0"):
@@ -854,19 +854,19 @@ def _timeline_result(assessment: Any, payload: dict[str, Any]) -> dict[str, Any]
         plain_verdict_text = (
             f"Cảnh báo nghiêm khắc: Dự án này đang quá sức chịu đựng ({deficit_reason}). "
             f"Mua lúc này dễ dẫn đến nguy cơ vỡ nợ hoặc phải bán cắt lỗ khi lãi suất biến động! "
-            f"👉 HƯỚNG MỞ CHO MÔI GIỚI: Không để mất khách - Hãy chủ động đề xuất đổi sang căn hộ diện tích nhỏ hơn hoặc dự án khác có mức giá vừa vặn hơn."
+            f"HƯỚNG MỞ CHO MÔI GIỚI: Không để mất khách - Hãy chủ động đề xuất đổi sang căn hộ diện tích nhỏ hơn hoặc dự án khác có mức giá vừa vặn hơn."
         )
         verdict_summary = "Vượt trần an toàn tài chính. Môi giới cần đóng vai chuyên gia có tâm: khuyên khách chuyển hướng để bảo vệ khách và giữ trọn uy tín."
-        advice_action = "⛔ CHIẾN LƯỢC MÔI GIỚI CÓ TÂM: Khuyên khách dừng phương án này và lập tức chuyển hướng sang căn hộ diện tích nhỏ hơn hoặc dự án khác phù hợp tài chính để chốt giao dịch thành công."
+        advice_action = "CHIẾN LƯỢC MÔI GIỚI CÓ TÂM: Khuyên khách dừng phương án này và lập tức chuyển hướng sang căn hộ diện tích nhỏ hơn hoặc dự án khác phù hợp tài chính để chốt giao dịch thành công."
         action_plan.append("Chủ động chuyển hướng khách sang căn hộ diện tích nhỏ hơn hoặc dự án lân cận có đơn giá hợp lý hơn.")
         action_plan.append("Gia tăng vốn tự có tích lũy hoặc tìm người đồng vay trước khi quyết định.")
 
     # 4 Comprehensive Advice Bullets for Customer
     customer_advice = [
-        f"📍 Vị trí & Kết nối: Cách chỗ làm {assessment.distance_km:.1f} km (khoảng {max(10, drive_mins)} phút di chuyển), đảm bảo thời gian cho gia đình.",
-        f"💰 Vốn ban đầu cần chuẩn bị: Tối thiểu {upfront_bil:.2f} tỷ VND (đã gồm đối ứng CĐT, 2% bảo trì, trước bạ và gói nội thất).",
-        f"💳 Dòng tiền định kỳ: Dành {pmt_mil:.1f} tr/tháng cho tiền nhà; số tiền còn lại trong ví là {fcf_str} để lo sinh hoạt và tích lũy.",
-        f"💡 Định hướng cố vấn: {advice_action}"
+        f"Vị trí & Kết nối: Cách chỗ làm {assessment.distance_km:.1f} km (khoảng {max(10, drive_mins)} phút di chuyển), đảm bảo thời gian cho gia đình.",
+        f"Vốn ban đầu cần chuẩn bị: Tối thiểu {upfront_bil:.2f} tỷ VND (đã gồm đối ứng CĐT, 2% bảo trì, trước bạ và gói nội thất).",
+        f"Dòng tiền định kỳ: Dành {pmt_mil:.1f} tr/tháng cho tiền nhà; số tiền còn lại trong ví là {fcf_str} để lo sinh hoạt và tích lũy.",
+        f"Định hướng cố vấn: {advice_action}"
     ]
 
     # Timeline adjusted
