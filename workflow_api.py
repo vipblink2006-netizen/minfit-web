@@ -445,14 +445,14 @@ def _build_payment_scheme_evaluation(project: Any, payload: dict[str, Any], asse
     progress_schedule = []
 
     if scheme_key == "loan_htls":
-        scheme_name = "🌟 Vay HTLS 0% & Ân hạn nợ gốc (24 tháng)"
+        scheme_name = "Vay HTLS 0% & Ân hạn nợ gốc (24 tháng)"
         scheme_badge = "HTLS 0% CĐT"
         phase_1_summary = f"Giai đoạn 1 (Tháng 1-24): Đóng 30% đối ứng ban đầu (~{price * Decimal('0.30') / Decimal('1000000000'):.2f} tỷ). Ngân hàng giải ngân 70%, CĐT hỗ trợ 100% lãi suất và ân hạn nợ gốc. Áp lực chi trả = 0đ/tháng."
         phase_2_summary = f"Giai đoạn 2 (Sau tháng 24): Bắt đầu trả gốc + lãi thả nổi theo thị trường (~{pmt_floating / Decimal('1000000'):.1f} triệu/tháng). Có cảnh báo bước nhảy lãi suất (Payment Shock)."
         advisory_recommendation = "Cực kỳ tối ưu cho khách hàng đang có dòng tiền kinh doanh hoặc muốn tích lũy thêm thu nhập trong 2 năm đầu nhận nhà. Cần lên kế hoạch dự phòng khi hết ưu đãi lãi suất."
 
     elif scheme_key == "standard_progress":
-        scheme_name = "📅 Thanh toán chuẩn theo tiến độ CĐT (Chia 7 đợt, không vay)"
+        scheme_name = "Thanh toán chuẩn theo tiến độ CĐT (Chia 7 đợt, không vay)"
         scheme_badge = "Tiến độ CĐT (Không vay)"
         phase_1_summary = f"Giai đoạn thi công (18-24 tháng): Chia nhỏ thành 7 đợt thanh toán (Đợt 1: 15%, Đợt 2-6: 10% mỗi 2-3 tháng, Đợt 7 nhận nhà: 25%, Đợt sổ hồng: 5%). Không phát sinh 1 đồng lãi vay nào."
         phase_2_summary = "Giai đoạn nhận nhà & về ở: Sạch nợ 100% với ngân hàng. Hàng tháng chỉ trả phí dịch vụ sinh hoạt và quản lý tòa nhà, không có gánh nặng trả góp."
@@ -482,7 +482,7 @@ def _build_payment_scheme_evaluation(project: Any, payload: dict[str, Any], asse
 
     elif scheme_key == "early_payment":
         disc_pct = dec(payload.get("discount_percent", "10"))
-        scheme_name = f"⚡ Thanh toán sớm 95% (Chiết khấu {disc_pct:.0f}%)"
+        scheme_name = f"Thanh toán sớm 95% (Chiết khấu {disc_pct:.0f}%)"
         scheme_badge = f"Chiết khấu {disc_pct:.0f}%"
         discounted_price = price * (Decimal("1") - disc_pct / Decimal("100"))
         phase_1_summary = f"Thanh toán dồn 95% ngay khi ký HĐMB: Tiết kiệm trực tiếp ~{(price * disc_pct / Decimal('100')) / Decimal('1000000000'):.2f} tỷ vào giá gốc căn hộ. Số tiền thanh toán ban đầu ~{discounted_price * Decimal('0.95') / Decimal('1000000000'):.2f} tỷ."
@@ -490,14 +490,14 @@ def _build_payment_scheme_evaluation(project: Any, payload: dict[str, Any], asse
         advisory_recommendation = "Khuyến nghị chỉ áp dụng khi quỹ tiền mặt khả dụng đủ lớn và không làm cạn kiệt Quỹ khẩn cấp sinh tồn 6 tháng của gia đình."
 
     elif scheme_key == "bank_vcb":
-        scheme_name = "🏛️ Vay Vietcombank (Lãi cố định 6.0% trong 2 năm)"
+        scheme_name = "Vay Vietcombank (Lãi cố định 6.0% trong 2 năm)"
         scheme_badge = "VCB 6.0% (2 năm)"
         phase_1_summary = f"Giai đoạn cố định 24 tháng đầu: Lãi suất ưu đãi 6.0%/năm, trả góp ~{pmt_intro / Decimal('1000000'):.1f} triệu/tháng (gốc + lãi)."
         phase_2_summary = f"Giai đoạn thả nổi từ tháng 25: Lãi suất thả nổi ~10.5%/năm, trả góp ~{pmt_floating / Decimal('1000000'):.1f} triệu/tháng."
         advisory_recommendation = "Gói vay an toàn với thời gian cố định 2 năm dài, giúp ổn định tài chính gia đình trong giai đoạn đầu chuyển nhượng và hoàn thiện nội thất."
 
     elif scheme_key == "bank_bidv":
-        scheme_name = "🏛️ Vay BIDV (Lãi cố định 5.5% trong 1 năm)"
+        scheme_name = "Vay BIDV (Lãi cố định 5.5% trong 1 năm)"
         scheme_badge = "BIDV 5.5% (1 năm)"
         phase_1_summary = f"Giai đoạn cố định 12 tháng đầu: Lãi suất ưu đãi 5.5%/năm, trả góp ~{pmt_intro / Decimal('1000000'):.1f} triệu/tháng."
         phase_2_summary = f"Giai đoạn thả nổi từ tháng 13: Lãi suất thả nổi ~10.5%/năm, trả góp ~{pmt_floating / Decimal('1000000'):.1f} triệu/tháng."
@@ -505,14 +505,14 @@ def _build_payment_scheme_evaluation(project: Any, payload: dict[str, Any], asse
 
     elif scheme_key == "equity_100":
         transfer_cost = price * Decimal("0.025")
-        scheme_name = "💰 Thanh toán 100% bằng vốn tự có (Không vay)"
+        scheme_name = "Thanh toán 100% bằng vốn tự có (Không vay)"
         scheme_badge = "100% Vốn tự có"
         phase_1_summary = f"Thanh toán trọn gói 100% giá trị chuyển nhượng (~{price / Decimal('1000000000'):.2f} tỷ) + Thuế TNCN & Phí trước bạ 2.5% (~{transfer_cost / Decimal('1000000'):.1f} triệu)."
         phase_2_summary = "Hoàn tất nhận nhà & sang tên Sổ đỏ: Không phát sinh nợ gốc lãi hàng tháng (PMT = 0đ). Toàn bộ thu nhập dùng cho sinh hoạt và tích lũy."
         advisory_recommendation = "Phương án tối đa hóa an toàn tài chính. Thích hợp cho khách hàng có tài sản tích lũy lớn, không muốn chịu rủi ro biến động thị trường tín dụng."
 
     else:  # commercial_custom
-        scheme_name = "⚙️ Gói vay thương mại tùy chỉnh"
+        scheme_name = "Gói vay thương mại tùy chỉnh"
         scheme_badge = "Vay thương mại"
         phase_1_summary = f"Giai đoạn ưu đãi ({payload.get('intro_months', 24)} tháng): Lãi suất {payload.get('intro_rate_percent', 7.5)}%/năm, trả góp ~{pmt_intro / Decimal('1000000'):.1f} triệu/tháng."
         phase_2_summary = f"Giai đoạn thả nổi: Lãi suất {payload.get('floating_rate_percent', 10.5)}%/năm, trả góp ~{pmt_floating / Decimal('1000000'):.1f} triệu/tháng."
@@ -1209,23 +1209,23 @@ def parse_raw_project_text(raw_text: str) -> dict[str, Any]:
 
     # Extract Project Name (Single-line precise matching without stripping letters)
     project_name = ""
-    name_match = re.search(r'(?:dự án|project|khu căn hộ|tổ hợp)[ \t]*[:\-–]?[ \t]*([^\n\r,;🔥🌟👉✨💥]+)', text, re.IGNORECASE)
+    name_match = re.search(r'(?:dự án|project|khu căn hộ|tổ hợp)[ \t]*[:\-–]?[ \t]*([^\n\r,;]+)', text, re.IGNORECASE)
     if name_match:
         project_name = name_match.group(1).strip()
     else:
         for line in lines:
-            clean_l = re.sub(r'^[\s\W\d\.\-\*•–🔥🌟👉✨💥]+', '', line).strip()
-            clean_l = re.sub(r'[\s🔥🌟👉✨💥:\-–]+$', '', clean_l).strip()
+            clean_l = re.sub(r'^[\s\W\d\.\-\*•–]+', '', line).strip()
+            clean_l = re.sub(r'[\s:\-–]+$', '', clean_l).strip()
             if clean_l and not clean_l.startswith("http") and len(clean_l) >= 3 and not any(k in clean_l.lower() for k in ["tổng hợp", "bảng hàng", "mặt bằng", "link 360", "layout", "tài liệu", "tiện ích", "giá bán", "diện tích", "slide", "đào tạo"]):
                 clean_l = re.sub(r'^(?:bán\s+căn\s+(?:\d+pn\s+)?|quỹ\s+căn\s+(?:ngoại\s+giao\s+)?|căn\s+hộ\s+)', '', clean_l, flags=re.IGNORECASE).strip()
                 project_name = clean_l
                 break
     if not project_name and lines:
-        clean_first = re.sub(r'^[\s\W\d\.\-\*•–🔥🌟👉✨💥]+', '', lines[0]).strip()
+        clean_first = re.sub(r'^[\s\W\d\.\-\*•–]+', '', lines[0]).strip()
         clean_first = re.sub(r'^(?:bán\s+căn\s+(?:\d+pn\s+)?|quỹ\s+căn\s+(?:ngoại\s+giao\s+)?|căn\s+hộ\s+)', '', clean_first, flags=re.IGNORECASE).strip()
         project_name = clean_first[:40].strip()
 
-    project_name = re.sub(r'[\:\-–🔥🌟👉✨💥]+$', '', project_name).strip()
+    project_name = re.sub(r'[\:\-–]+$', '', project_name).strip()
 
     if (not project_name or project_name.startswith("http") or "drive.google.com" in project_name or "docs.google.com" in project_name) and (links.get("drive") or links.get("sheets") or links.get("training")):
         import urllib.request
@@ -1879,7 +1879,7 @@ def authenticate_user(payload: dict[str, Any], client_ip: str = "127.0.0.1") -> 
     admin_pin = os.getenv("MINFIT_ADMIN_PIN", "admin888")
     if os.getenv("MINFIT_ADMIN_PIN") is None:
         import logging
-        logging.warning("⚠️ CẢNH BÁO BẢO MẬT: Đang dùng mã PIN Admin mặc định ('admin888'). Hãy đặt biến môi trường MINFIT_ADMIN_PIN trong production!")
+        logging.warning(" CẢNH BÁO BẢO MẬT: Đang dùng mã PIN Admin mặc định ('admin888'). Hãy đặt biến môi trường MINFIT_ADMIN_PIN trong production!")
 
     rate_key = f"{client_ip}:{role}:{email or 'admin'}"
     locked, remaining_seconds = LOGIN_RATE_LIMITER.is_locked(rate_key)
