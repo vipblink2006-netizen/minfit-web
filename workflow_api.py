@@ -1160,6 +1160,7 @@ def parse_raw_project_text(raw_text: str) -> dict[str, Any]:
         "kuula_360": "",
         "layout": "",
         "perspective": "",
+        "training": "",
         "general": []
     }
 
@@ -1180,6 +1181,8 @@ def parse_raw_project_text(raw_text: str) -> dict[str, Any]:
             links["perspective"] = u
         elif any(k in l_lower for k in ["tài liệu", "tai lieu", "drive", "tổng hợp"]):
             links["drive"] = u
+        elif any(k in l_lower for k in ["slide", "đào tạo", "dao tao", "training", "presentation"]):
+            links["training"] = u
         else:
             links["general"].append(u)
 
@@ -1193,6 +1196,11 @@ def parse_raw_project_text(raw_text: str) -> dict[str, Any]:
             if "drive.google.com" in u and u != links.get("sheets"):
                 links["drive"] = u
                 break
+    if not links["training"]:
+        for u in urls:
+            if "docs.google.com/presentation" in u:
+                links["training"] = u
+                break
     if not links["kuula_360"]:
         for u in urls:
             if "kuula.co" in u or "360" in u:
@@ -1201,14 +1209,14 @@ def parse_raw_project_text(raw_text: str) -> dict[str, Any]:
 
     # Extract Project Name (Single-line precise matching without stripping letters)
     project_name = ""
-    name_match = re.search(r'(?:dự án|project|khu căn hộ|tổ hợp)\s*[:\-–]?\s*([^\n\r,;🔥🌟👉✨💥]+)', text, re.IGNORECASE)
+    name_match = re.search(r'(?:dự án|project|khu căn hộ|tổ hợp)[ \t]*[:\-–]?[ \t]*([^\n\r,;🔥🌟👉✨💥]+)', text, re.IGNORECASE)
     if name_match:
         project_name = name_match.group(1).strip()
     else:
         for line in lines:
             clean_l = re.sub(r'^[\s\W\d\.\-\*•–🔥🌟👉✨💥]+', '', line).strip()
             clean_l = re.sub(r'[\s🔥🌟👉✨💥:\-–]+$', '', clean_l).strip()
-            if clean_l and not clean_l.startswith("http") and len(clean_l) >= 3 and not any(k in clean_l.lower() for k in ["tổng hợp", "bảng hàng", "mặt bằng", "link 360", "layout", "tài liệu", "tiện ích", "giá bán", "diện tích"]):
+            if clean_l and not clean_l.startswith("http") and len(clean_l) >= 3 and not any(k in clean_l.lower() for k in ["tổng hợp", "bảng hàng", "mặt bằng", "link 360", "layout", "tài liệu", "tiện ích", "giá bán", "diện tích", "slide", "đào tạo"]):
                 clean_l = re.sub(r'^(?:bán\s+căn\s+(?:\d+pn\s+)?|quỹ\s+căn\s+(?:ngoại\s+giao\s+)?|căn\s+hộ\s+)', '', clean_l, flags=re.IGNORECASE).strip()
                 project_name = clean_l
                 break
@@ -1218,6 +1226,20 @@ def parse_raw_project_text(raw_text: str) -> dict[str, Any]:
         project_name = clean_first[:40].strip()
 
     project_name = re.sub(r'[\:\-–🔥🌟👉✨💥]+$', '', project_name).strip()
+
+    if (not project_name or project_name.startswith("http") or "drive.google.com" in project_name or "docs.google.com" in project_name) and (links.get("drive") or links.get("sheets") or links.get("training")):
+        import urllib.request
+        try:
+            url_to_fetch = links.get("training") or links.get("drive") or links.get("sheets")
+            req = urllib.request.Request(url_to_fetch, headers={'User-Agent': 'Mozilla/5.0'})
+            html = urllib.request.urlopen(req, timeout=3).read().decode('utf-8')
+            title_match = re.search(r'<title>(.*?)</title>', html, re.IGNORECASE)
+            if title_match:
+                fetched_title = title_match.group(1).replace("- Google Drive", "").replace("- Google Sheets", "").replace("- Google Slides", "").strip()
+                if fetched_title and fetched_title not in ["Google Drive", "Google Sheets", "Google Slides", "Meet Google Drive – One place for all your files"]:
+                    project_name = fetched_title
+        except Exception:
+            pass
 
     # Detect District & GPS
     hanoi_districts = {
@@ -1273,20 +1295,44 @@ def parse_raw_project_text(raw_text: str) -> dict[str, Any]:
             detected_developer = dev
             break
 
-    # Detect Price & Area
+    # Detect Price & Area (Smart Regex 2.0)
     price_mil_m2 = 0.0
     total_price_billion = 0.0
 
-    bil_price_match = re.search(r'(\d+(?:[\.,]\d+)?)\s*(?:-|đến|–)?\s*(\d+(?:[\.,]\d+)?)?\s*(?:tỷ|ty|tỷ\s*đồng|bil)', text, re.IGNORECASE)
+    # Support 'tỏi', 'x', etc.
+    bil_price_match = re.search(r'(\d+(?:[\.,]\d+)?)?\s*(?:tỷ|ty|tỏi|tỷ\s*đồng|bil)\s*([x\d]+)?', text, re.IGNORECASE)
     if bil_price_match:
-        val1 = float(bil_price_match.group(1).replace(",", "."))
-        val2 = float(bil_price_match.group(2).replace(",", ".")) if bil_price_match.group(2) else val1
-        total_price_billion = round((val1 + val2) / 2.0, 2)
+        val1_str = bil_price_match.group(1)
+        suffix = bil_price_match.group(2)
+        if val1_str:
+            base = float(val1_str.replace(",", "."))
+            if suffix and 'x' in suffix.lower():
+                base += 0.5  # '3 tỷ x' -> 3.5
+            elif suffix and suffix.isdigit():
+                base += float(suffix) / 10.0  # '3 tỷ 2' -> 3.2
+            total_price_billion = base
 
-    m2_price_match = re.search(r'(\d+(?:[\.,]\d+)?)\s*(?:-|đến|–)?\s*(\d+(?:[\.,]\d+)?)?\s*(?:tr(?:iệu)?(?:/m[2²])?|triệu/m[2²]|tr/m[2²])', text, re.IGNORECASE)
+    # Support 'tr/m', 'tr/m2', 'triệu', 'x tr/m'
+    m2_price_match = re.search(r'(\d+(?:[\.,]\d+)?)([xX])?\s*(?:-|đến|–)?\s*(\d+(?:[\.,]\d+)?)?([xX])?\s*(?:tr(?:iệu)?(?:/m[2²]?)?|tr/m)', text, re.IGNORECASE)
     if m2_price_match:
-        val1 = float(m2_price_match.group(1).replace(",", "."))
-        val2 = float(m2_price_match.group(2).replace(",", ".")) if m2_price_match.group(2) else val1
+        val1_str = m2_price_match.group(1)
+        has_x1 = m2_price_match.group(2)
+        val2_str = m2_price_match.group(3)
+        has_x2 = m2_price_match.group(4)
+        
+        val1 = float(val1_str.replace(",", ".")) if val1_str else 0
+        if has_x1:
+            if val1 < 10: val1 = val1 * 10 + 5
+            else: val1 += 5
+        
+        if val2_str:
+            val2 = float(val2_str.replace(",", "."))
+            if has_x2:
+                if val2 < 10: val2 = val2 * 10 + 5
+                else: val2 += 5
+        else:
+            val2 = val1
+            
         cand_m2 = round((val1 + val2) / 2.0, 1)
         if cand_m2 >= 15:
             price_mil_m2 = cand_m2
@@ -1310,6 +1356,53 @@ def parse_raw_project_text(raw_text: str) -> dict[str, Any]:
         price_mil_m2 = 75.0
         price_min_vnd = int(price_mil_m2 * area_m2 * 1_000_000)
         total_price_billion = round(float(price_min_vnd) / 1_000_000_000, 2)
+
+    # Detect Layout Types & Bedrooms
+    found_bds = re.findall(r'(studio|duplex|penthouse|\d\s*pn(?:\+\d)?)', text, re.IGNORECASE)
+    layout_types = "Studio - 3PN"
+    bedrooms = "2PN"
+    if found_bds:
+        bds_clean = []
+        for b in found_bds:
+            bl = b.lower().replace(" ", "")
+            if bl == "studio": bds_clean.append("Studio")
+            elif bl == "duplex": bds_clean.append("Duplex")
+            elif bl == "penthouse": bds_clean.append("Penthouse")
+            else: bds_clean.append(bl.upper())
+        bds_clean = list(dict.fromkeys(bds_clean))
+        layout_types = " - ".join(bds_clean)
+        bedrooms = bds_clean[0] if bds_clean else "2PN"
+
+    # Detect Payment Policy & Grace Period
+    payment_policy = ""
+    grace_period_months = 0
+    htls_match = re.search(r'(?:htls|hỗ trợ lãi suất|vay).*?(\d{1,2})\s*(?:tháng|m)', text, re.IGNORECASE)
+    if htls_match:
+        grace_period_months = int(htls_match.group(1))
+        payment_policy += f"HTLS {grace_period_months} tháng. "
+    
+    ck_match = re.search(r'(?:chiết khấu|ck).*?(\d{1,2}(?:[\.,]\d+)?)\s*%', text, re.IGNORECASE)
+    if ck_match:
+        payment_policy += f"Chiết khấu {ck_match.group(1)}%. "
+        
+    if not payment_policy:
+        payment_policy = "Thanh toán theo tiến độ chuẩn"
+
+    # Detect Handover
+    handover_year = 2026
+    handover_status = "Đang mở bán"
+    is_handed_over = False
+    
+    ho_match = re.search(r'(?:bàn giao|nhận nhà).*?(202\d)', text, re.IGNORECASE)
+    if ho_match:
+        handover_year = int(ho_match.group(1))
+        if handover_year <= 2024:
+            handover_status = "Đã bàn giao"
+            is_handed_over = True
+            
+    if any(k in text.lower() for k in ["sẵn sàng ở", "ở ngay", "nhận nhà ngay", "đã bàn giao"]):
+        handover_status = "Đã bàn giao"
+        is_handed_over = True
 
     # Detect Amenities
     amenity_codes = []
@@ -1359,18 +1452,18 @@ def parse_raw_project_text(raw_text: str) -> dict[str, Any]:
             "area_m2": area_m2,
             "area_min_m2": max(30.0, round(area_m2 * 0.7, 1)),
             "area_max_m2": round(area_m2 * 1.6, 1),
-            "layout_types": "Studio - 3PN",
+            "layout_types": layout_types,
             "lat": detected_lat,
             "lng": detected_lng,
             "management_fee_per_m2": 15000.0,
-            "bedrooms": "2PN",
+            "bedrooms": bedrooms,
             "amenities": amenity_codes,
             "raw_amenities": ", ".join(AMENITY_LABELS.get(a, a) for a in amenity_codes),
-            "handover_status": "Đang mở bán",
-            "handover_year": 2026,
-            "is_handed_over": False,
-            "payment_policy": "Chiết khấu mở bán & Hỗ trợ vay ngân hàng 70%",
-            "grace_period_months": 24,
+            "handover_status": handover_status,
+            "handover_year": handover_year,
+            "is_handed_over": is_handed_over,
+            "payment_policy": payment_policy.strip(),
+            "grace_period_months": grace_period_months if grace_period_months > 0 else 0,
             "inventory_link": links["sheets"] or links["drive"] or "",
             "risk_note": "Dự án mới tải lên bởi môi giới",
             "is_global": 0,
