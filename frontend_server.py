@@ -108,6 +108,12 @@ class ReactRouterHandler(SimpleHTTPRequestHandler):
         if endpoint == "/api/projects":
             try:
                 broker_id = query.get("broker_id", [None])[0]
+                if broker_id == 'broker_default':
+                    session = self._get_authenticated_session()
+                    if session and session['role'] == 'broker':
+                        broker_id = session['user_id']
+                    else:
+                        broker_id = None
                 include_inactive = query.get("include_inactive", ["0"])[0] in ("1", "true")
                 self._send_json({"projects": list_projects(broker_id=broker_id, include_inactive=include_inactive)})
             except Exception as error:
@@ -195,7 +201,10 @@ class ReactRouterHandler(SimpleHTTPRequestHandler):
                 if not self._require_auth(allowed_roles=["admin", "broker"]): return
                 self._send_json(parse_raw_project_text(payload.get("raw_text", "")))
             elif endpoint == "/api/projects":
-                if not self._require_auth(allowed_roles=["admin", "broker"]): return
+                session = self._require_auth(allowed_roles=["admin", "broker"])
+                if not session: return
+                if session["role"] == "broker":
+                    payload["broker_id"] = session["user_id"]
                 self._send_json(create_or_update_project(payload))
             elif endpoint == "/api/projects/toggle":
                 if not self._require_auth(allowed_roles=["admin"]): return
