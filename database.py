@@ -1083,6 +1083,7 @@ def save_user_to_db(user_data: dict[str, Any]) -> dict[str, Any]:
         connection.execute(
             """
             INSERT INTO Users (id, name, email, phone, password_hash, role, agency, status, clients_count, projects_count, units_sold, created_at, last_active)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
             ON CONFLICT(id) DO UPDATE SET
                 name=excluded.name,
                 email=excluded.email,
