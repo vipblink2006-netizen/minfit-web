@@ -192,10 +192,10 @@ class ReactRouterHandler(SimpleHTTPRequestHandler):
                 if not self._require_auth(allowed_roles=["admin"]): return
                 self._send_json(sync_market_data())
             elif endpoint == "/api/projects/parse-text":
-                if not self._require_auth(allowed_roles=["admin"]): return
+                if not self._require_auth(allowed_roles=["admin", "broker"]): return
                 self._send_json(parse_raw_project_text(payload.get("raw_text", "")))
             elif endpoint == "/api/projects":
-                if not self._require_auth(allowed_roles=["admin"]): return
+                if not self._require_auth(allowed_roles=["admin", "broker"]): return
                 self._send_json(create_or_update_project(payload))
             elif endpoint == "/api/projects/toggle":
                 if not self._require_auth(allowed_roles=["admin"]): return
