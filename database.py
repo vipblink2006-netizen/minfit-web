@@ -983,6 +983,8 @@ def _ensure_users_table_and_seeds(connection: sqlite3.Connection) -> None:
 
 
 def list_users_from_db() -> list[dict[str, Any]]:
+    import workflow_api
+    workflow_api._ensure_workflow_tables()
     with connect() as connection:
         _ensure_users_table_and_seeds(connection)
         user_rows = connection.execute("SELECT * FROM Users ORDER BY role DESC, created_at DESC").fetchall()
@@ -1060,6 +1062,8 @@ def toggle_user_status_in_db(user_id: str) -> dict[str, Any]:
 
 
 def get_user_stats_from_db() -> dict[str, Any]:
+    import workflow_api
+    workflow_api._ensure_workflow_tables()
     with connect() as connection:
         _ensure_users_table_and_seeds(connection)
         users = [to_dict(r) for r in connection.execute("SELECT * FROM Users").fetchall()]
