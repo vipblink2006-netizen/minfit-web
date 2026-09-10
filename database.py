@@ -623,8 +623,9 @@ def _ensure_sqlite_database(database_name: str) -> DatabaseStatus:
 
 def load_projects_from_database(include_inactive: bool = False, broker_id: str | None = None) -> list[Project]:
     server, database_name, _ = settings()
-    if server.lower() == "sqlite":
-        _sqlite_ready(database_name)
+    if server.lower() in ("sqlite", "postgres", "supabase"):
+        if server.lower() == "sqlite":
+            _sqlite_ready(database_name)
         condition = "WHERE 1=1"
         params: list[Any] = []
         if not include_inactive:
@@ -816,7 +817,7 @@ def save_broker_selection_to_db(broker_id: str, project_ids: list[str]) -> None:
 def load_broker_selection_from_db(broker_id: str) -> list[str]:
     with connect() as connection:
         rows = connection.execute("SELECT project_id FROM BrokerSelectedProjects WHERE broker_id=?", (broker_id,)).fetchall()
-        return [r["project_id"] for r in rows]
+        return [to_dict(r)["project_id"] for r in rows]
 
 
 def hash_password(password: str) -> str:
@@ -1055,7 +1056,7 @@ def toggle_user_status_in_db(user_id: str) -> dict[str, Any]:
         row = connection.execute("SELECT status FROM Users WHERE id=?", (user_id,)).fetchone()
         if not row:
             raise ValueError(f"Không tìm thấy user với ID: {user_id}")
-        new_status = "locked" if row["status"] == "active" else "active"
+        new_status = "locked" if to_dict(row)["status"] == "active" else "active"
         connection.execute("UPDATE Users SET status=? WHERE id=?", (new_status, user_id))
         connection.commit()
         return {"id": user_id, "status": new_status}
@@ -1091,18 +1092,20 @@ def get_user_stats_from_db() -> dict[str, Any]:
 
 def load_persona_weights_from_database() -> dict[str, dict[str, Decimal]]:
     server, database_name, _ = settings()
-    if server.lower() == "sqlite":
-        _sqlite_ready(database_name)
+    if server.lower() in ("sqlite", "postgres", "supabase"):
+        if server.lower() == "sqlite":
+            _sqlite_ready(database_name)
         weights: dict[str, dict[str, Decimal]] = {}
         with connect() as connection:
             rows = connection.execute(
                 "SELECT persona_code, price_weight, distance_weight, amenity_weight FROM PersonaWeights"
             ).fetchall()
         for row in rows:
-            weights[row["persona_code"]] = {
-                "price": Decimal(str(row["price_weight"])),
-                "distance": Decimal(str(row["distance_weight"])),
-                "amenities": Decimal(str(row["amenity_weight"])),
+            d = to_dict(row)
+            weights[d["persona_code"]] = {
+                "price": Decimal(str(d["price_weight"])),
+                "distance": Decimal(str(d["distance_weight"])),
+                "amenities": Decimal(str(d["amenity_weight"])),
             }
         return weights
 
@@ -1121,9 +1124,10 @@ def load_persona_weights_from_database() -> dict[str, dict[str, Decimal]]:
 
 def database_status() -> DatabaseStatus:
     server, database_name, _ = settings()
-    if server.lower() == "sqlite":
-        _sqlite_ready(database_name)
-        return _sqlite_status(database_name)
+    if server.lower() in ("sqlite", "postgres", "supabase"):
+        if server.lower() == "sqlite":
+            _sqlite_ready(database_name)
+        return _sqlite_status(database_name) # Will use _sqlite_status temporarily for postgres
     with connect() as connection:
         cursor = connection.cursor()
         project_count = cursor.execute("SELECT COUNT(*) FROM dbo.Projects WHERE is_active=1").fetchval()
