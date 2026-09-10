@@ -622,6 +622,7 @@ def _ensure_sqlite_database(database_name: str) -> DatabaseStatus:
 
 
 def load_projects_from_database(include_inactive: bool = False, broker_id: str | None = None) -> list[Project]:
+    ensure_database()
     server, database_name, _ = settings()
     if server.lower() in ("sqlite", "postgres", "supabase"):
         if server.lower() == "sqlite":
@@ -1091,6 +1092,7 @@ def get_user_stats_from_db() -> dict[str, Any]:
 
 
 def load_persona_weights_from_database() -> dict[str, dict[str, Decimal]]:
+    ensure_database()
     server, database_name, _ = settings()
     if server.lower() in ("sqlite", "postgres", "supabase"):
         if server.lower() == "sqlite":
