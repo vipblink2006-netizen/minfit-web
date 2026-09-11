@@ -34,6 +34,16 @@ from workflow_api import (
     verify_session,
     revoke_session,
 )
+from loan_dti import (
+    FinancialProfile,
+    LoanScenario,
+    simulate_loan,
+    annuity_payment,
+    calculate_dti_score,
+    calculate_ltv_score,
+    decimal_value,
+)
+from decimal import Decimal
 
 
 ROOT = Path(__file__).resolve().parent
@@ -229,6 +239,90 @@ class ReactRouterHandler(SimpleHTTPRequestHandler):
                 if not self._require_auth(allowed_roles=["admin"]): return
                 uid = str(payload.get("user_id", ""))
                 self._send_json(toggle_user_status(uid))
+
+            # ── Direct loan_dti.py endpoints ──────────────────────
+            elif endpoint == "/api/simulate-loan":
+                # Full loan simulation — returns complete amortization timeline
+                profile = FinancialProfile(
+                    monthly_income=decimal_value(payload.get("monthly_income", 65000000)),
+                    available_cash=decimal_value(payload.get("available_cash", 1500000000)),
+                    existing_debt_payment=decimal_value(payload.get("existing_debt_payment", 0)),
+                    essential_expenses=decimal_value(payload.get("essential_expenses", 15000000)),
+                    income_stability=str(payload.get("income_stability", "salaried")),
+                )
+                scenario = LoanScenario(
+                    loan_ratio_percent=decimal_value(payload.get("loan_ratio_percent", 70)),
+                    term_years=int(payload.get("term_years", 25)),
+                    phase1_rate_percent=decimal_value(payload.get("phase1_rate_percent", 0)),
+                    phase1_months=int(payload.get("phase1_months", 24)),
+                    phase2_rate_percent=decimal_value(payload.get("phase2_rate_percent", 11)),
+                    repayment_method=str(payload.get("repayment_method", "annuity")),
+                    grace_type=str(payload.get("grace_type", "interest_only")),
+                    grace_months=int(payload.get("grace_months", 24)),
+                )
+                project_price = decimal_value(payload.get("project_price", 5000000000))
+                mgmt_fee = decimal_value(payload.get("monthly_management_fee", 0))
+
+                analysis = simulate_loan(profile, scenario, project_price, mgmt_fee)
+
+                # Serialize LoanAnalysis → JSON-safe dict
+                timeline_rows = [
+                    {
+                        "month": r.month, "phase": r.phase,
+                        "annual_rate_percent": float(r.annual_rate_percent),
+                        "opening_balance": float(r.opening_balance),
+                        "interest": float(r.interest),
+                        "principal": float(r.principal),
+                        "payment": float(r.payment),
+                        "closing_balance": float(r.closing_balance),
+                        "dti": float(r.dti),
+                        "free_cash_flow": float(r.free_cash_flow),
+                    }
+                    for r in analysis.timeline
+                ]
+                shocks = [
+                    {
+                        "month": s.month,
+                        "previous_payment": float(s.previous_payment),
+                        "current_payment": float(s.current_payment),
+                        "increase_ratio": float(s.increase_ratio) if s.increase_ratio is not None else None,
+                    }
+                    for s in analysis.payment_shocks
+                ]
+                self._send_json({
+                    "initial_loan": float(analysis.initial_loan),
+                    "ltv": float(analysis.ltv),
+                    "max_payment": float(analysis.max_payment),
+                    "max_payment_month": analysis.max_payment_month,
+                    "max_dti": float(analysis.max_dti),
+                    "max_dti_month": analysis.max_dti_month,
+                    "min_fcf": float(analysis.min_fcf),
+                    "min_fcf_month": analysis.min_fcf_month,
+                    "survival_months": float(analysis.survival_months),
+                    "illusion_of_safety": analysis.illusion_of_safety,
+                    "hard_filter_reasons": list(analysis.hard_filter_reasons),
+                    "is_eligible": analysis.is_eligible,
+                    "timeline": timeline_rows,
+                    "payment_shocks": shocks,
+                    "dti_score": float(calculate_dti_score(analysis.max_dti)),
+                    "ltv_score": float(calculate_ltv_score(analysis.ltv)),
+                })
+
+            elif endpoint == "/api/quick-calc":
+                # Lightweight: just compute monthly payment (annuity) without full simulation
+                balance = decimal_value(payload.get("loan_amount", 0))
+                rate = decimal_value(payload.get("annual_rate_percent", 11))
+                months = int(payload.get("term_months", 300))
+                pmt = annuity_payment(balance, rate, months)
+                self._send_json({
+                    "monthly_payment": float(pmt),
+                    "total_payment": float(pmt * months),
+                    "total_interest": float(pmt * months - balance),
+                    "loan_amount": float(balance),
+                    "term_months": months,
+                    "annual_rate_percent": float(rate),
+                })
+
             else:
                 self.send_error(404)
         except Exception as error:
