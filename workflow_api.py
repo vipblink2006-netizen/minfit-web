@@ -325,6 +325,20 @@ LIFESTYLE_BUFFERS: dict[str, Decimal] = {
     "liberal": Decimal("7000000"),
 }
 
+
+def safe_int(value, default: int, min_val: int = None, max_val: int = None) -> int:
+    try:
+        if value is None or str(value).strip() == "":
+            return default
+        result = int(float(value))
+    except (TypeError, ValueError):
+        return default
+    if min_val is not None:
+        result = max(result, min_val)
+    if max_val is not None:
+        result = min(result, max_val)
+    return result
+
 def dec(value: Any, default: str = "0") -> Decimal:
     if value is None or value == "":
         return Decimal(default)
@@ -537,6 +551,8 @@ def _timeline_result(assessment: Any, payload: dict[str, Any], costs: dict) -> d
     # Extract costs from engine
     declared_income = costs["declared_income"]
     net_acceptable_income = costs["net_acceptable_income"]
+    raw_net_income = costs.get("raw_net_income", net_acceptable_income)
+    raw_net_income = costs.get("raw_net_income", net_acceptable_income)
     risk_discount_amount = costs["risk_discount_amount"]
     base_living_cost = costs["base_living_cost"]
     education_cost = costs["education_cost"]
@@ -567,7 +583,7 @@ def _timeline_result(assessment: Any, payload: dict[str, Any], costs: dict) -> d
 
 
     # 5. Core Metric: Total Housing Burden (THB Ratio)
-    grace_months = int(payload.get("grace_months", 0))
+    grace_months = safe_int(payload.get("grace_months"), default=0)
     post_grace_rows = [row for row in analysis.timeline if row.month > max(grace_months, 24)]
     pmt_floating = max((row.payment for row in post_grace_rows), default=analysis.max_payment)
     pmt_intro = analysis.timeline[0].payment if analysis.timeline else pmt_floating
@@ -618,8 +634,8 @@ def _timeline_result(assessment: Any, payload: dict[str, Any], costs: dict) -> d
     survival_runway_months = analysis.survival_months
 
     # 8. Dynamic Payment Shock & Auto-Suggestion (Dynamic Transition Detection)
-    phase1_months = int(payload.get("intro_months", 24))
-    grace_months = int(payload.get("grace_months", 0))
+    phase1_months = safe_int(payload.get("intro_months"), default=24)
+    grace_months = safe_int(payload.get("grace_months"), default=0)
     transition_month = max(phase1_months, grace_months)
 
     if transition_month > 0 and len(analysis.timeline) > transition_month:
@@ -650,7 +666,7 @@ def _timeline_result(assessment: Any, payload: dict[str, Any], costs: dict) -> d
 
     shock_suggestion = ""
     if payment_shock_ratio > Decimal("1.8"):
-        term_years = int(payload.get("term_years", 20))
+        term_years = safe_int(payload.get("term_years"), default=20)
         suggested_term = 30 if term_years < 30 else 35
         suggested_pmt = round((pmt_after * Decimal(term_years) / Decimal(suggested_term)) / Decimal("1000000"), 1)
         shock_suggestion = (
@@ -672,13 +688,13 @@ def _timeline_result(assessment: Any, payload: dict[str, Any], costs: dict) -> d
     )
     stress_scenario = LoanScenario(
         loan_ratio_percent=dec(payload.get("ltv_percent"), "70"),
-        term_years=int(payload.get("term_years", 20)),
+        term_years=safe_int(payload.get("term_years"), default=20),
         phase1_rate_percent=stress_rate,
         phase1_months=0,
         phase2_rate_percent=stress_rate,
         repayment_method=str(payload.get("repayment_method", "annuity")),
         grace_type=str(payload.get("grace_type", "none")),
-        grace_months=int(payload.get("grace_months", 0)),
+        grace_months=safe_int(payload.get("grace_months"), default=0),
     )
     stress = simulate_loan(stress_profile, stress_scenario, project.price_min_vnd, project.monthly_management_fee, max(cash_remaining_after_move_in, Decimal("0")))
     stress_dti = (stress.max_payment + existing_debt) / net_acceptable_income if net_acceptable_income > Decimal("0") else Decimal("1.0")
@@ -690,7 +706,7 @@ def _timeline_result(assessment: Any, payload: dict[str, Any], costs: dict) -> d
     if real_fcf >= Decimal("10000000"):
         annual_prepay_pool = real_fcf * Decimal("0.70") * Decimal("12")
         initial_loan = analysis.initial_loan
-        term_years = int(payload.get("term_years", 20))
+        term_years = safe_int(payload.get("term_years"), default=20)
         effective_annual_payoff = annual_prepay_pool + (initial_loan / Decimal(term_years))
         if effective_annual_payoff > Decimal("0"):
             early_payoff_years = round(float(initial_loan / effective_annual_payoff), 1)
@@ -724,7 +740,7 @@ def _timeline_result(assessment: Any, payload: dict[str, Any], costs: dict) -> d
     elif real_fcf >= Decimal("0"):
         pros.append(f"Dòng tiền hàng tháng không bị âm: vẫn giữ được mức thặng dư +{real_fcf/Decimal('1000000'):.1f} triệu/tháng.")
 
-    if early_payoff_years and early_payoff_years < int(payload.get("term_years", 20)):
+    if early_payoff_years and early_payoff_years < safe_int(payload.get("term_years"), default=20):
         pros.append(f"Khả năng tất toán sớm: Có thể hoàn tất trả sạch nợ trong ~{early_payoff_years} năm thay vì {payload.get('term_years', 20)} năm.")
 
     if project.payment_policy:
@@ -835,6 +851,8 @@ def _timeline_result(assessment: Any, payload: dict[str, Any], costs: dict) -> d
         f"Dòng tiền định kỳ: Dành {pmt_mil:.1f} tr/tháng cho tiền nhà; số tiền còn lại trong ví là {fcf_str} để lo sinh hoạt và tích lũy.",
         f"Định hướng cố vấn: {advice_action}"
     ]
+    if raw_net_income < Decimal("10000000"):
+        customer_advice.insert(0, f"⚠️ Cảnh báo: Thu nhập thực tế sau chiết khấu chỉ {float(raw_net_income)/1000000:.1f}tr quá thấp. Kết quả thẩm định DTI và FCF dưới đây đang tính theo mức giả định tối thiểu 10tr/tháng và có thể quá lạc quan so với thực tế.")
 
     # Timeline adjusted
     cash_inflows = _cash_equivalent_inflow(payload)
@@ -941,6 +959,8 @@ def _timeline_result(assessment: Any, payload: dict[str, Any], costs: dict) -> d
         "financial_breakdown": {
             "declared_income": declared_income,
             "net_acceptable_income": net_acceptable_income,
+        "raw_net_income": raw_net_income,
+        "raw_net_income": raw_net_income,
             "risk_discount_amount": risk_discount_amount,
             "pmt_floating": pmt_floating,
             "pmt_intro": pmt_intro,
@@ -1353,7 +1373,7 @@ def parse_raw_project_text(raw_text: str) -> dict[str, Any]:
     grace_period_months = 0
     htls_match = re.search(r'(?:htls|hỗ trợ lãi suất|vay).*?(\d{1,2})\s*(?:tháng|m)', text, re.IGNORECASE)
     if htls_match:
-        grace_period_months = int(htls_match.group(1))
+        grace_period_months = safe_int(htls_match.group(1), default=24)
         payment_policy += f"HTLS {grace_period_months} tháng. "
     
     ck_match = re.search(r'(?:chiết khấu|ck).*?(\d{1,2}(?:[\.,]\d+)?)\s*%', text, re.IGNORECASE)
@@ -1370,7 +1390,7 @@ def parse_raw_project_text(raw_text: str) -> dict[str, Any]:
     
     ho_match = re.search(r'(?:bàn giao|nhận nhà).*?(202\d)', text, re.IGNORECASE)
     if ho_match:
-        handover_year = int(ho_match.group(1))
+        handover_year = safe_int(ho_match.group(1), default=2025)
         if handover_year <= 2024:
             handover_status = "Đã bàn giao"
             is_handed_over = True
@@ -1514,14 +1534,15 @@ def _build_profile_and_costs(payload: dict, project: Project, persona: str, dist
     declared_income = dec(payload.get("monthly_income"), "65000000") + dec(payload.get("co_borrower_income", "0"))
     if declared_income <= Decimal("0"): declared_income = Decimal("65000000")
     risk_discount_amount = declared_income * Decimal("0.10")
-    net_acceptable_income = max(Decimal("10000000"), declared_income - risk_discount_amount)
+    raw_net_income = declared_income - risk_discount_amount
+    net_acceptable_income = max(Decimal("10000000"), raw_net_income)
 
     workplace_district = str(payload.get("workplace_district", "Cầu Giấy"))
     urban_tier = _get_district_tier(workplace_district)
     tier_costs = BASE_LIVING_COSTS.get(urban_tier, BASE_LIVING_COSTS[2])
     base_living_cost = tier_costs.get(persona, Decimal("15000000"))
 
-    child_count = int(payload.get("child_count", 1 if persona == "family_with_children" else 0))
+    child_count = safe_int(payload.get("child_count"), default=1 if persona == "family_with_children" else 0)
     school_type = str(payload.get("school_type", "private"))
     education_cost = EDUCATION_COST_PER_CHILD.get(school_type, Decimal("6500000")) * Decimal(child_count) if persona == "family_with_children" else Decimal("0")
 
@@ -1574,6 +1595,8 @@ def _build_profile_and_costs(payload: dict, project: Project, persona: str, dist
     costs = {
         "declared_income": declared_income,
         "net_acceptable_income": net_acceptable_income,
+        "raw_net_income": raw_net_income,
+        "raw_net_income": raw_net_income,
         "risk_discount_amount": risk_discount_amount,
         "base_living_cost": base_living_cost,
         "education_cost": education_cost,
@@ -1611,7 +1634,7 @@ def calculate_base_living_cost(payload: dict[str, Any]) -> float:
     tier_costs = BASE_LIVING_COSTS.get(urban_tier, BASE_LIVING_COSTS[2])
     base_living_cost = tier_costs.get(persona, Decimal("15000000"))
 
-    child_count = int(payload.get("child_count", 1 if persona == "family_with_children" else 0))
+    child_count = safe_int(payload.get("child_count"), default=1 if persona == "family_with_children" else 0)
     school_type = str(payload.get("school_type", "private"))
     education_cost = EDUCATION_COST_PER_CHILD.get(school_type, Decimal("6500000")) * Decimal(child_count) if persona == "family_with_children" else Decimal("0")
 
@@ -1741,13 +1764,13 @@ def analyze(payload: dict[str, Any]) -> dict[str, Any]:
         
         scenario = LoanScenario(
             loan_ratio_percent=dec(loc_payload.get("ltv_percent") if loc_payload.get("ltv_percent") is not None else loc_ltv),
-            term_years=int(loc_payload.get("term_years") or loc_payload.get("loan_term_years", 20)),
+            term_years=safe_int(loc_payload.get("term_years") or loc_payload.get("loan_term_years"), default=20),
             phase1_rate_percent=dec(loc_payload.get("intro_rate_percent") or loc_payload.get("interest_rate_intro") or loc_intro_rate),
-            phase1_months=int(loc_payload.get("intro_months") if loc_payload.get("intro_months") is not None else (loc_payload.get("intro_period_months") if loc_payload.get("intro_period_months") is not None else loc_intro_months)),
+            phase1_months=safe_int(loc_payload.get("intro_months") if loc_payload.get("intro_months") is not None else loc_payload.get("intro_period_months"), default=loc_intro_months),
             phase2_rate_percent=dec(loc_payload.get("floating_rate_percent") or loc_payload.get("interest_rate_floating") or loc_floating_rate),
             repayment_method=str(loc_payload.get("repayment_method", "annuity")),
             grace_type=str(loc_payload.get("grace_type") or loc_grace_type),
-            grace_months=int(loc_payload.get("grace_months") if loc_payload.get("grace_months") is not None else loc_grace_months),
+            grace_months=safe_int(loc_payload.get("grace_months"), default=loc_grace_months),
         )
         return scenario, discount, loc_payload
 
@@ -1764,7 +1787,7 @@ def analyze(payload: dict[str, Any]) -> dict[str, Any]:
 
     raw_age = payload.get("client_age", 32)
     try:
-        age_val = int(raw_age)
+        age_val = safe_int(raw_age, default=32)
         if age_val > 1900:  # Nếu người dùng nhập năm sinh (ví dụ 1994)
             client_age = max(18, 2026 - age_val)
         else:
@@ -1841,7 +1864,7 @@ def create_client(payload: dict[str, Any]) -> dict[str, Any]:
     name = str(payload.get("name") or payload.get("client_name") or "Khách hàng mới").strip()
     email = str(payload.get("email", "")).strip()
     phone = str(payload.get("phone") or payload.get("client_phone") or "").strip()
-    units_sold = int(payload.get("units_sold") or 0)
+    units_sold = safe_int(payload.get("units_sold"), default=0)
     profile = json.dumps(payload.get("profile", payload), ensure_ascii=False)
     with connect() as connection:
         cursor = connection.cursor()
