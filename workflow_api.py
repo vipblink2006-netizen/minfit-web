@@ -529,73 +529,42 @@ def _build_payment_scheme_evaluation(project: Any, payload: dict[str, Any], asse
     }
 
 
-def _timeline_result(assessment: Any, payload: dict[str, Any]) -> dict[str, Any]:
+def _timeline_result(assessment: Any, payload: dict[str, Any], costs: dict) -> dict[str, Any]:
     project: Project = assessment.project
     analysis = assessment.analysis
     persona = str(payload.get("persona", "family_with_children"))
 
-    # 1. Net Acceptable Income (10% Risk Discount)
-    declared_income = dec(payload.get("monthly_income"), "65000000")
-    risk_discount_amount = declared_income * Decimal("0.10")
-    net_acceptable_income = max(Decimal("10000000"), declared_income - risk_discount_amount)
-
-    # 2. Multi-tier Baseline Living Cost
-    workplace_district = str(payload.get("workplace_district", "Cầu Giấy"))
-    urban_tier = _get_district_tier(workplace_district)
-    tier_costs = BASE_LIVING_COSTS.get(urban_tier, BASE_LIVING_COSTS[2])
-    base_living_cost = tier_costs.get(persona, Decimal("15000000"))
-
-    # Education Cost
-    child_count = int(payload.get("child_count", 1 if persona == "family_with_children" else 0))
-    school_type = str(payload.get("school_type", "private"))
-    cost_per_child = EDUCATION_COST_PER_CHILD.get(school_type, Decimal("6500000"))
-    education_cost = cost_per_child * Decimal(child_count) if persona == "family_with_children" else Decimal("0")
-
-    # Healthcare & Lifestyle
-    health_cond = str(payload.get("health_condition", "healthy"))
-    healthcare_cost = HEALTHCARE_COSTS.get(health_cond, Decimal("1200000"))
-    lifestyle_level = str(payload.get("lifestyle_level", "moderate"))
-    lifestyle_cost = LIFESTYLE_BUFFERS.get(lifestyle_level, Decimal("3000000"))
-
-    # Dynamic living surcharge from project amenities
-    dynamic_surcharge, dynamic_reason = _calculate_dynamic_surcharge(project, persona)
-
-    # Custom override
-    custom_expenses = dec(payload.get("essential_expenses", "0"))
-    calculated_total_living = base_living_cost + education_cost + healthcare_cost + lifestyle_cost + dynamic_surcharge
-    total_living_cost = max(custom_expenses, calculated_total_living)
-
-    # 3. Hidden Costs Engine (Tùy biến theo property_type)
-    property_type = getattr(project, 'property_type', 'chung_cu')
-    building_mgmt_fee = project.monthly_management_fee
-    transport_mode = str(payload.get("transport_mode", "motorbike"))
-    has_car = bool(payload.get("has_car", transport_mode == "car"))
+    # Extract costs from engine
+    declared_income = costs["declared_income"]
+    net_acceptable_income = costs["net_acceptable_income"]
+    risk_discount_amount = costs["risk_discount_amount"]
+    base_living_cost = costs["base_living_cost"]
+    education_cost = costs["education_cost"]
+    healthcare_cost = costs["healthcare_cost"]
+    lifestyle_cost = costs["lifestyle_cost"]
+    dynamic_surcharge = costs["dynamic_surcharge"]
+    dynamic_reason = costs["dynamic_reason"]
+    total_living_cost = costs["total_living_cost"]
+    building_mgmt_fee = costs["building_mgmt_fee"]
+    parking_fee = costs["parking_fee"]
+    maintenance_depreciation_fee = costs["maintenance_depreciation_fee"]
+    total_housing_fees = costs["total_housing_fees"]
+    commute_cost = costs["commute_cost"]
+    existing_debt = costs["existing_debt"]
+    available_cash = costs["available_cash"]
+    
     project_price = project.price_min_vnd
-
-    parking_fee = Decimal("0")
-    maintenance_depreciation_fee = Decimal("0")
-
+    property_type = getattr(project, 'property_type', 'chung_cu')
     if property_type == "tho_cu":
-        building_mgmt_fee = Decimal("0")
-        maintenance_depreciation_fee = Decimal("3000000")  # Chi phí duy tu, hỏng hóc nhà thứ cấp
-        transfer_tax_amount = project_price * Decimal("0.025")  # Thuế TNCN (2%) + Lệ phí trước bạ (0.5%)
+        transfer_tax_amount = project_price * Decimal("0.025")
         maintenance_fund_amount = Decimal("0")
-        if has_car and not bool(payload.get("has_garage", False)):
-            parking_fee = Decimal("2500000")
     elif property_type == "thap_tang":
-        maintenance_depreciation_fee = Decimal("2000000")
         transfer_tax_amount = project_price * Decimal("0.005")
         maintenance_fund_amount = project_price * Decimal("0.01")
-    else:  # chung_cu
-        parking_fee = Decimal("1500000") if has_car else Decimal("300000")
+    else:
         transfer_tax_amount = project_price * Decimal("0.005")
         maintenance_fund_amount = project_price * Decimal("0.02")
 
-    total_housing_fees = building_mgmt_fee + parking_fee + maintenance_depreciation_fee
-
-    # 4. Commute Cost
-    commute_cost = _transport_cost(payload, assessment.distance_km)
-    existing_debt = dec(payload.get("existing_debt", "0"))
 
     # 5. Core Metric: Total Housing Burden (THB Ratio)
     grace_months = int(payload.get("grace_months", 0))
@@ -609,7 +578,7 @@ def _timeline_result(assessment: Any, payload: dict[str, Any]) -> dict[str, Any]
 
     # 6. Core Metric: Real Free Cash Flow (Real FCF)
     total_monthly_outflow = total_housing_cost + total_living_cost + commute_cost + existing_debt
-    real_fcf = net_acceptable_income - total_monthly_outflow
+    real_fcf = analysis.min_fcf
     fcf_mil_temp = float(real_fcf / Decimal("1000000"))
     if real_fcf >= Decimal("15000000"):
         fcf_status = "safe"
@@ -646,9 +615,7 @@ def _timeline_result(assessment: Any, payload: dict[str, Any]) -> dict[str, Any]
         action_plan_hnwi.append(f"Kịch bản 1 (Mua đứt): Thanh toán 100%, giữ lại {float(outright_cash_left)/1e9:.1f} tỷ tiền mặt. Lợi ích: Nhận chiết khấu tối đa, an toàn tuyệt đối, DTI = 0%.")
         action_plan_hnwi.append(f"Kịch bản 2 (Đòn bẩy): Dùng gói HTLS, giữ lại {float(leverage_cash_left)/1e9:.1f} tỷ tiền mặt. Lợi ích: Mang {float(leverage_cash_left)/1e9:.1f} tỷ đi đầu tư sinh lời ở kênh khác (chứng khoán, trái phiếu, kinh doanh) để bù đắp lãi suất thả nổi sau ưu đãi.")
 
-    survival_runway_months = Decimal("0")
-    if total_monthly_outflow > Decimal("0") and cash_remaining_after_move_in > Decimal("0"):
-        survival_runway_months = round(cash_remaining_after_move_in / total_monthly_outflow, 1)
+    survival_runway_months = analysis.survival_months
 
     # 8. Dynamic Payment Shock & Auto-Suggestion (Dynamic Transition Detection)
     phase1_months = int(payload.get("intro_months", 24))
@@ -1010,10 +977,10 @@ def _timeline_result(assessment: Any, payload: dict[str, Any]) -> dict[str, Any]
         "financial": {
             "down_payment": down_payment,
             "initial_loan": analysis.initial_loan,
-            "max_payment": pmt_floating,
-            "max_dti": (pmt_floating + existing_debt) / net_acceptable_income,
-            "min_fcf": real_fcf,
-            "survival_months": survival_runway_months,
+            "max_payment": analysis.max_payment,
+            "max_dti": analysis.max_dti,
+            "min_fcf": analysis.min_fcf,
+            "survival_months": analysis.survival_months,
         },
         "payment_shock": {
             "ratio": payment_shock_ratio,
@@ -1543,6 +1510,119 @@ def _json_value(data: Any) -> Any:
     return data
 
 
+def _build_profile_and_costs(payload: dict, project: Project, persona: str, distance_km: float) -> tuple[FinancialProfile, dict]:
+    declared_income = dec(payload.get("monthly_income"), "65000000") + dec(payload.get("co_borrower_income", "0"))
+    if declared_income <= Decimal("0"): declared_income = Decimal("65000000")
+    risk_discount_amount = declared_income * Decimal("0.10")
+    net_acceptable_income = max(Decimal("10000000"), declared_income - risk_discount_amount)
+
+    workplace_district = str(payload.get("workplace_district", "Cầu Giấy"))
+    urban_tier = _get_district_tier(workplace_district)
+    tier_costs = BASE_LIVING_COSTS.get(urban_tier, BASE_LIVING_COSTS[2])
+    base_living_cost = tier_costs.get(persona, Decimal("15000000"))
+
+    child_count = int(payload.get("child_count", 1 if persona == "family_with_children" else 0))
+    school_type = str(payload.get("school_type", "private"))
+    education_cost = EDUCATION_COST_PER_CHILD.get(school_type, Decimal("6500000")) * Decimal(child_count) if persona == "family_with_children" else Decimal("0")
+
+    health_cond = str(payload.get("health_condition", "healthy"))
+    healthcare_cost = HEALTHCARE_COSTS.get(health_cond, Decimal("1200000"))
+    lifestyle_level = str(payload.get("lifestyle_level", "moderate"))
+    lifestyle_cost = LIFESTYLE_BUFFERS.get(lifestyle_level, Decimal("3000000"))
+
+    dynamic_surcharge, dynamic_reason = _calculate_dynamic_surcharge(project, persona)
+    custom_expenses = dec(payload.get("essential_expenses", "0"))
+    calculated_total_living = base_living_cost + education_cost + healthcare_cost + lifestyle_cost + dynamic_surcharge
+    total_living_cost = max(custom_expenses, calculated_total_living)
+
+    property_type = getattr(project, 'property_type', 'chung_cu')
+    building_mgmt_fee = project.monthly_management_fee
+    transport_mode = str(payload.get("transport_mode", "motorbike"))
+    has_car = bool(payload.get("has_car", transport_mode == "car"))
+    
+    parking_fee = Decimal("0")
+    maintenance_depreciation_fee = Decimal("0")
+    if property_type == "tho_cu":
+        building_mgmt_fee = Decimal("0")
+        maintenance_depreciation_fee = Decimal("3000000")
+        if has_car and not bool(payload.get("has_garage", False)):
+            parking_fee = Decimal("2500000")
+    elif property_type == "thap_tang":
+        maintenance_depreciation_fee = Decimal("2000000")
+    else:
+        parking_fee = Decimal("1500000") if has_car else Decimal("300000")
+
+    commute_cost = _transport_cost(payload, distance_km)
+    
+    total_housing_fees = building_mgmt_fee + parking_fee + maintenance_depreciation_fee
+    
+    # Simulate_loan will subtract building_mgmt_fee independently, so profile essential_expenses just includes the rest
+    essential_expenses = total_living_cost + commute_cost + parking_fee + maintenance_depreciation_fee
+
+    avail_cash = dec(payload.get("available_cash"), "1500000000")
+    if avail_cash <= Decimal("0"): avail_cash = Decimal("1500000000")
+    existing_debt = dec(payload.get("existing_debt", "0"))
+
+    profile = FinancialProfile(
+        monthly_income=net_acceptable_income,
+        available_cash=avail_cash,
+        existing_debt_payment=existing_debt,
+        essential_expenses=essential_expenses,
+        income_stability=str(payload.get("income_stability", "salaried"))
+    )
+
+    costs = {
+        "declared_income": declared_income,
+        "net_acceptable_income": net_acceptable_income,
+        "risk_discount_amount": risk_discount_amount,
+        "base_living_cost": base_living_cost,
+        "education_cost": education_cost,
+        "healthcare_cost": healthcare_cost,
+        "lifestyle_cost": lifestyle_cost,
+        "dynamic_surcharge": dynamic_surcharge,
+        "dynamic_reason": dynamic_reason,
+        "total_living_cost": total_living_cost,
+        "building_mgmt_fee": building_mgmt_fee,
+        "parking_fee": parking_fee,
+        "maintenance_depreciation_fee": maintenance_depreciation_fee,
+        "total_housing_fees": total_housing_fees,
+        "commute_cost": commute_cost,
+        "existing_debt": existing_debt,
+        "available_cash": avail_cash
+    }
+    return profile, costs
+
+
+def calculate_base_living_cost(payload: dict[str, Any]) -> float:
+    persona = str(payload.get("persona", "family_with_children"))
+    PERSONA_ALIASES = {
+        "first_home": "young_couple",
+        "family": "family_with_children",
+        "couple": "young_couple",
+        "investor": "single",
+        "individual": "single",
+    }
+    persona = PERSONA_ALIASES.get(persona, persona)
+    if persona not in PERSONAS:
+        persona = "family_with_children"
+        
+    workplace_district = str(payload.get("workplace_district", "Cầu Giấy"))
+    urban_tier = _get_district_tier(workplace_district)
+    tier_costs = BASE_LIVING_COSTS.get(urban_tier, BASE_LIVING_COSTS[2])
+    base_living_cost = tier_costs.get(persona, Decimal("15000000"))
+
+    child_count = int(payload.get("child_count", 1 if persona == "family_with_children" else 0))
+    school_type = str(payload.get("school_type", "private"))
+    education_cost = EDUCATION_COST_PER_CHILD.get(school_type, Decimal("6500000")) * Decimal(child_count) if persona == "family_with_children" else Decimal("0")
+
+    health_cond = str(payload.get("health_condition", "healthy"))
+    healthcare_cost = HEALTHCARE_COSTS.get(health_cond, Decimal("1200000"))
+    lifestyle_level = str(payload.get("lifestyle_level", "moderate"))
+    lifestyle_cost = LIFESTYLE_BUFFERS.get(lifestyle_level, Decimal("3000000"))
+
+    return float(base_living_cost + education_cost + healthcare_cost + lifestyle_cost)
+
+
 def analyze(payload: dict[str, Any]) -> dict[str, Any]:
     _ensure_workflow_tables()
     persona = str(payload.get("persona", "family_with_children"))
@@ -1557,21 +1637,7 @@ def analyze(payload: dict[str, Any]) -> dict[str, Any]:
     if persona not in PERSONAS:
         persona = "family_with_children"
 
-    income = dec(payload.get("monthly_income"), "65000000") + dec(payload.get("co_borrower_income", "0"))
-    if income <= Decimal("0"):
-        income = Decimal("65000000")
 
-    avail_cash = dec(payload.get("available_cash"), "1500000000")
-    if avail_cash <= Decimal("0"):
-        avail_cash = Decimal("1500000000")
-
-    transport_placeholder = Decimal("0")
-    profile = FinancialProfile(
-        monthly_income=income,
-        available_cash=avail_cash,
-        existing_debt_payment=dec(payload.get("existing_debt", "0")),
-        essential_expenses=dec(payload.get("essential_expenses"), "20000000") + transport_placeholder,
-    )
     market_segment = str(payload.get("market_segment", "primary"))
     payment_scheme = str(payload.get("payment_scheme") or ("loan_htls" if market_segment == "primary" else "bank_vcb"))
 
@@ -1713,9 +1779,12 @@ def analyze(payload: dict[str, Any]) -> dict[str, Any]:
         scenario, discount, proj_payload = build_scenario_for_project(project)
         discounted_project = replace(project, price_min_vnd=project.price_min_vnd * (Decimal("1") - discount))
         
+        distance_km = calculate_distance_km(workplace_lat, workplace_lng, project.latitude, project.longitude)
+        proj_profile, proj_costs = _build_profile_and_costs(payload, discounted_project, persona, distance_km)
+        
         assessment = assess_project(
             discounted_project,
-            profile,
+            proj_profile,
             scenario,
             persona,
             workplace_lat,
@@ -1725,7 +1794,7 @@ def analyze(payload: dict[str, Any]) -> dict[str, Any]:
             client_age=client_age,
             cic_status=cic_status,
         )
-        results.append(_timeline_result(assessment, proj_payload))
+        results.append(_timeline_result(assessment, proj_payload, proj_costs))
 
     # Sắp xếp ưu tiên: Hạng A lên đầu (theo điểm giảm dần), tiếp đến Hạng B, cuối cùng là Hạng C
     rank_order = {"A": 0, "B": 1, "C": 2}

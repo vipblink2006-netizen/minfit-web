@@ -1265,8 +1265,8 @@
         const isClassB = rankClass === 'B';
         const isClassC = rankClass === 'C';
 
-        const fcfVal = Number(fb.real_fcf || item.financial?.min_fcf || 0);
-        const dtiVal = Number(fb.thb_ratio || ((Number(fb.pmt_floating || 0) / Number(fb.net_acceptable_income || 1)) * 100) || 45);
+        const fcfVal = Number(item.financial?.min_fcf || fb.real_fcf || 0);
+        const dtiVal = Number(fb.thb_ratio || 0);
 
         // Header Badge Matching Image 2
         const badgeConfig = isClassA
@@ -1680,7 +1680,7 @@
         const sa = item.smart_amortization || {};
         const fitScore = Number(item.scores?.total || 0).toFixed(0);
         const rankClass = item.rank_class || 'A';
-        const fcfVal = Number(fb.real_fcf || item.financial?.min_fcf || 0);
+        const fcfVal = Number(item.financial?.min_fcf || fb.real_fcf || 0);
 
         const filteredTimeline = useMemo(() => {
           if (!item.timeline) return [];
@@ -2170,7 +2170,7 @@
 
         const prosList = verdict.pros && verdict.pros.length ? verdict.pros : [
           `Vị trí kết nối thuận tiện đến nơi làm việc (${Number(item.distance_km).toFixed(1)} km).`,
-          `Gánh nặng chi trả nhà ở THB ở mức an toàn (${Number(fb.thb_ratio || 35).toFixed(1)}%).`,
+          `Gánh nặng chi trả nhà ở THB ở mức an toàn (${Number(fb.thb_ratio || 0).toFixed(1)}%).`,
           `Dòng tiền thặng dư hàng tháng đạt ${formatMillion(Math.max(0, Number(fb.real_fcf || 0)))}.`
         ];
 
@@ -2649,26 +2649,24 @@
           required_amenities: ['school', 'park', 'parking']
         });
 
-        // Smart living cost auto-calculator
+        // Fetch smart living cost from backend (Single Source of Truth)
         useEffect(() => {
-          const tier = 2;
-          const baseMap = {
-            1: { single: 10000000, young_couple: 16000000, family_with_children: 18000000, retired: 12000000 },
-            2: { single: 8500000, young_couple: 13500000, family_with_children: 15000000, retired: 10000000 },
-            3: { single: 7000000, young_couple: 11000000, family_with_children: 12500000, retired: 8500000 },
-            4: { single: 5500000, young_couple: 8500000, family_with_children: 9500000, retired: 7000000 }
+          let isMounted = true;
+          const fetchLivingCost = async () => {
+            try {
+              const res = await apiCall('/api/living-cost', form);
+              const data = await res.json();
+              if (isMounted && data.essential_expenses) {
+                setForm(old => ({ ...old, essential_expenses: data.essential_expenses }));
+              }
+            } catch (e) {
+              console.error('Failed to fetch living cost', e);
+            }
           };
-          const eduMap = { none: 0, public: 2500000, private: 6500000, bilingual: 15000000, international: 30000000 };
-          const healthMap = { healthy: 1200000, toddler: 2500000, chronic: 4500000 };
-          const lifeMap = { frugal: 0, moderate: 3000000, liberal: 7000000 };
-
-          const base = (baseMap[tier] || baseMap[2])[form.persona] || 15000000;
-          const edu = form.persona === 'family_with_children' ? (form.child_count * (eduMap[form.school_type] || 6500000)) : 0;
-          const health = healthMap[form.health_condition] || 1200000;
-          const life = lifeMap[form.lifestyle_level] || 3000000;
-
-          const total = base + edu + health + life;
-          setForm(old => ({ ...old, essential_expenses: total }));
+          
+          // Debounce slightly to prevent spamming while typing/changing
+          const timer = setTimeout(fetchLivingCost, 300);
+          return () => { isMounted = false; clearTimeout(timer); };
         }, [form.persona, form.child_count, form.school_type, form.health_condition, form.lifestyle_level, form.workplace_district]);
 
         const loadProjects = () => {

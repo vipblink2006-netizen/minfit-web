@@ -29,6 +29,7 @@ from workflow_api import (
     save_broker_selection,
     save_user,
     sync_market_data,
+    calculate_base_living_cost,
     toggle_project_status,
     toggle_user_status,
     verify_session,
@@ -241,6 +242,8 @@ class ReactRouterHandler(SimpleHTTPRequestHandler):
                 self._send_json(toggle_user_status(uid))
 
             # ── Direct loan_dti.py endpoints ──────────────────────
+            elif endpoint == "/api/living-cost":
+                self._send_json({"essential_expenses": calculate_base_living_cost(payload)})
             elif endpoint == "/api/simulate-loan":
                 # Full loan simulation — returns complete amortization timeline
                 profile = FinancialProfile(
