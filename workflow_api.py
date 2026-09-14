@@ -19,7 +19,7 @@ import time
 from typing import Any
 
 from loan_dti import FinancialProfile, LoanScenario, simulate_loan
-from project_engine import AMENITY_LABELS, PERSONA_WEIGHTS, Project, assess_project
+from project_engine import AMENITY_LABELS, PERSONA_WEIGHTS, Project, assess_project, haversine_distance
 from database import (
     connect,
     ensure_database,
@@ -897,7 +897,7 @@ def _timeline_result(assessment: Any, payload: dict[str, Any], costs: dict) -> d
             "price_per_m2_million": round(float(project.price_min_vnd / Decimal(project.area_m2) / Decimal("1000000")), 1),
             "market_updated": "T8/2026",
         },
-        "urban_tier": urban_tier,
+        "urban_tier": costs.get("urban_tier", 1),
         "rank_class": "A" if hnwi_strategy else assessment.rank_class,
         "hard_filter_status": "PASS" if hnwi_strategy else assessment.hard_filter_status,
         "status_label": "Đủ Điều Kiện (Vốn siêu mạnh)" if hnwi_strategy else assessment.status_label,
@@ -1595,6 +1595,7 @@ def _build_profile_and_costs(payload: dict, project: Project, persona: str, dist
     costs = {
         "declared_income": declared_income,
         "net_acceptable_income": net_acceptable_income,
+        "urban_tier": urban_tier,
         "raw_net_income": raw_net_income,
         "raw_net_income": raw_net_income,
         "risk_discount_amount": risk_discount_amount,
@@ -1802,7 +1803,7 @@ def analyze(payload: dict[str, Any]) -> dict[str, Any]:
         scenario, discount, proj_payload = build_scenario_for_project(project)
         discounted_project = replace(project, price_min_vnd=project.price_min_vnd * (Decimal("1") - discount))
         
-        distance_km = calculate_distance_km(workplace_lat, workplace_lng, project.latitude, project.longitude)
+        distance_km = haversine_distance(workplace_lat, workplace_lng, project.lat, project.lng)
         proj_profile, proj_costs = _build_profile_and_costs(payload, discounted_project, persona, distance_km)
         
         assessment = assess_project(

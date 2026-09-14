@@ -1,0 +1,12 @@
+{
+  "thb_ratio": "158.87244508573067",
+  "real_fcf": "-65083073.021129884",
+  "fcf_status": "danger",
+  "cash_remaining_after_move_in": "-2262000000.0",
+  "survival_runway_months": "0.0",
+  "verdict_status": "DO_NOT_BUY",
+  "rank_class": "C",
+  "hard_filter_status": "REJECT",
+  "payment_shock_ratio": "8.3",
+  "is_default_risk": "True"
+}
